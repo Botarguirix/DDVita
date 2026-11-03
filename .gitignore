@@ -1,0 +1,44 @@
+# Game files and material extracted or decompiled from the user's copy
+/data/
+/decomp/
+/extracted/
+/analysis/
+/dist/
+/o.txt
+
+# Local third-party executables and vendored dependencies (review separately)
+/tools/ilspycmd/
+/port/third_party/
+
+# Generated builds, packages, captures and saves
+**/build*/
+**/CMakeFiles/
+**/CMakeCache.txt
+*.exe
+*.dll
+*.so
+*.a
+*.o
+*.obj
+*.elf
+*.self
+*.bin
+*.vpk
+*.zip
+*.wav
+*.dda
+*.tex
+*.bmp
+run.json
+__pycache__/
+*.pyc
+
+# Credentials and local settings
+.env
+.env.*
+*.pem
+*.key
+.claude/
+.codex/
+.vs/
+.vscode/
