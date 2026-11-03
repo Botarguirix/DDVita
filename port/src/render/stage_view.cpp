@@ -426,7 +426,10 @@ void StageView::DrawArena() {
         Vec3 t{p.m[3], p.m[7], p.m[11]};
         Vec3 ax{p.m[0], p.m[4], p.m[8]}, ay{p.m[1], p.m[5], p.m[9]};
         if (p.billboard) {
-            BillboardTex(a_.Tex(d->texture), *d, t, Length(ax), Col(p.color));
+            // Billboard.LateUpdate: the camera's rotation turned 180 degrees around y, which mirrors
+            // the sprite unless its flipX cancels it (the spectators); scale and flipY are kept
+            Quad(a_.Tex(d->texture), *d, t, cam_.right * Length(ax), cam_.up * Length(ay), Col(p.color), !p.flipX, p.flipY,
+                 Blend::Cutout);
         } else {
             Quad(a_.Tex(d->texture), *d, t, ax, ay, Col(p.color), p.flipX, p.flipY, Blend::Cutout);
         }

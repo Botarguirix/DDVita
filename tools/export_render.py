@@ -174,14 +174,16 @@ def component(go, type_name):
 
 
 def has_script(go, class_name):
+    # MonoBehaviours have no type tree here: m_Script is read from the raw base fields
+    # (m_GameObject PPtr, m_Enabled + align, then m_Script PPtr at byte 16).
     for c in go.m_Component:
         if c.component.type.name != "MonoBehaviour":
             continue
-        try:
-            if c.component.read(check_read=False).m_Script.read().m_ClassName == class_name:
-                return True
-        except Exception:
-            pass
+        mb = c.component.deref()
+        fid, pid = struct.unpack_from("<iq", mb.get_raw_data(), 16)
+        script = resolve(mb.assets_file.name, {"m_FileID": fid, "m_PathID": pid})
+        if script is not None and script.read().m_ClassName == class_name:
+            return True
     return False
 
 

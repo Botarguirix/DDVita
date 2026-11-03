@@ -5,11 +5,13 @@
 //   Q / X (Square)   pass or take the ball        E / Y (Triangle)          shoot
 //   R / B (Circle)   rest                         U / Back (Select)         undo
 //   Tab / L, R       switch player                Y / N                     answer the undo suggestion
-//   F1               log / performance readout    Esc                       quit
+//   F1               log / performance readout    Esc / Start               pause menu
+//   Backspace        back (menus)
 #include <SDL.h>
 #include <SDL_opengl.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -40,7 +42,9 @@ Input FromKey(SDL_Keycode k) {
     case SDLK_y: return Input::Yes;
     case SDLK_n: return Input::No;
     case SDLK_F1: return Input::Log;
-    case SDLK_ESCAPE: return Input::Quit;
+    case SDLK_ESCAPE: return Input::Menu;
+    case SDLK_BACKSPACE: return Input::Back;
+    case SDLK_i: return Input::Info;
     default: return Input::None;
     }
 }
@@ -56,8 +60,9 @@ Input FromButton(Uint8 b) {
     case SDL_CONTROLLER_BUTTON_Y: return Input::Shoot;
     case SDL_CONTROLLER_BUTTON_B: return Input::Rest;
     case SDL_CONTROLLER_BUTTON_BACK: return Input::Undo;
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
-    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return Input::Switch;
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER: return Input::Switch;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER: return Input::Info;
+    case SDL_CONTROLLER_BUTTON_START: return Input::Menu;
     default: return Input::None;
     }
 }
@@ -77,7 +82,13 @@ bool Init(int* width, int* height, std::string* err) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    g_win = SDL_CreateWindow("Dungeon Deathball (Vita port, PC preview)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720,
+    // DDVITA_WINDOW=960x544 previews the Vita's layout (480x272 virtual)
+    int ww = 1280, wh = 720;
+    if (const char* s = std::getenv("DDVITA_WINDOW")) {
+        int w = 0, h = 0;
+        if (std::sscanf(s, "%dx%d", &w, &h) == 2 && w >= 320 && h >= 200) ww = w, wh = h;
+    }
+    g_win = SDL_CreateWindow("Dungeon Deathball (Vita port, PC preview)", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ww, wh,
                              SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     if (!g_win || !(g_ctx = SDL_GL_CreateContext(g_win))) {
         *err = SDL_GetError();
@@ -152,6 +163,11 @@ bool SaveScreenshot(const std::string& path, int w, int h) {
 
 const char* ButtonName(Input in) {
     switch (in) {
+    case Input::Up:
+    case Input::Down: return "Arrows";
+    case Input::Left:
+    case Input::Right: return "Left/Right";
+    case Input::Info: return "I";
     case Input::Confirm: return "Enter";
     case Input::PassTake: return "Q";
     case Input::Shoot: return "E";
@@ -160,10 +176,35 @@ const char* ButtonName(Input in) {
     case Input::Switch: return "Tab";
     case Input::Yes: return "Y";
     case Input::No: return "N";
-    case Input::Quit: return "Esc";
+    case Input::Menu: return "Esc";
+    case Input::Back: return "Backspace";
     default: return "?";
     }
 }
+
+const char* ButtonSprite(Input in) {
+    switch (in) {
+    case Input::Confirm: return "ButtonIcons_PC_Space";
+    case Input::PassTake: return "ButtonIcons_PC_AlphaQ";
+    case Input::Shoot: return "ButtonIcons_PC_AlphaE";
+    case Input::Rest: return "ButtonIcons_PC_AlphaR";
+    case Input::Undo: return "ButtonIcons_PC_AlphaU";
+    case Input::Switch: return "ButtonIcons_PC_Tab";
+    case Input::Menu: return "ButtonIcons_PC_Escape";
+    case Input::Info: return "ButtonIcons_PC_AlphaI";
+    default: return nullptr;
+    }
+}
+
+bool CanQuit() { return true; }
+
+void ShowError(const std::string& msg) { SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Dungeon Deathball", msg.c_str(), g_win); }
+
+// on PC the data comes from tools/prepare_data.py (instalar.bat)
+std::string GameCopyDir() { return std::string(); }
+std::string FontDir() { return std::string(); }
+void ShowProgress(const std::string&, float) {}
+void EndProgress() {}
 
 } // namespace dd::app::platform
 

@@ -2,10 +2,13 @@
 //
 // Controls: d-pad / left stick move the cursor, Cross does the tile action (and answers "yes"),
 // Circle rests (and answers "no"), Square passes or takes the ball, Triangle shoots, Select undoes,
-// L / R switch player, Start cycles the log / performance readout. Quit with the PS button.
+// L switches player, R shows the info popup, Start pauses and Select + Start cycles the log /
+// performance readout. Quit with the PS button.
 //
 // Data: ux0:data/ddvita if it holds gamedata.json, else app0:data (inside ddvita_full.vpk). The save
-// always goes to ux0:data/ddvita.
+// always goes to ux0:data/ddvita. With the user's game copied to ux0:data/ddvita/game, the data is
+// built there on the first start (install/installer.h). Missing or outdated data shows the system
+// message dialog.
 //
 // vitaGL compiles its fixed-function shaders at runtime: ur0:data/libshacccg.suprx must exist (the
 // usual requirement of vitaGL homebrew).
@@ -13,10 +16,12 @@
 #include <psp2/ctrl.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
+#include <psp2/message_dialog.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/power.h>
 #include <vitaGL.h>
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -34,6 +39,7 @@ constexpr const char* kDataDir = "ux0:data/ddvita";
 constexpr int kAudioGrain = 1024;
 
 uint32_t g_prev = 0;
+bool g_selectCombo = false; // Start was pressed while Select was held
 float g_repeat[4] = {0, 0, 0, 0}; // d-pad auto-repeat timers: up, down, left, right
 double g_lastPoll = 0;
 
@@ -110,11 +116,23 @@ bool Poll(std::vector<Input>* inputs, int* width, int* height) {
         uint32_t button;
         Input input;
     };
-    const Map map[] = {{SCE_CTRL_CROSS, Input::Confirm},  {SCE_CTRL_CIRCLE, Input::Rest},  {SCE_CTRL_SQUARE, Input::PassTake},
-                       {SCE_CTRL_TRIANGLE, Input::Shoot}, {SCE_CTRL_SELECT, Input::Undo},  {SCE_CTRL_LTRIGGER, Input::Switch},
-                       {SCE_CTRL_RTRIGGER, Input::Switch}, {SCE_CTRL_START, Input::Log}};
+    const Map map[] = {{SCE_CTRL_CROSS, Input::Confirm},  {SCE_CTRL_CIRCLE, Input::Rest},     {SCE_CTRL_SQUARE, Input::PassTake},
+                       {SCE_CTRL_TRIANGLE, Input::Shoot}, {SCE_CTRL_LTRIGGER, Input::Switch}, {SCE_CTRL_RTRIGGER, Input::Info}};
     for (const Map& m : map)
         if (pressed & m.button) inputs->push_back(m.input);
+    // Select alone (on release) = undo; Start = pause menu; Select + Start = log / performance readout
+    if (pressed & SCE_CTRL_START) {
+        if (b & SCE_CTRL_SELECT) {
+            inputs->push_back(Input::Log);
+            g_selectCombo = true;
+        } else {
+            inputs->push_back(Input::Menu);
+        }
+    }
+    if ((g_prev & SCE_CTRL_SELECT) && !(b & SCE_CTRL_SELECT)) {
+        if (!g_selectCombo) inputs->push_back(Input::Undo);
+        g_selectCombo = false;
+    }
     g_prev = b;
     return true;
 }
@@ -150,6 +168,11 @@ bool SaveScreenshot(const std::string&, int, int) { return false; }
 
 const char* ButtonName(Input in) {
     switch (in) {
+    case Input::Up:
+    case Input::Down: return "D-pad";
+    case Input::Left:
+    case Input::Right: return "Left/Right";
+    case Input::Info: return "R";
     case Input::Confirm:
     case Input::Yes: return "Cross";
     case Input::Rest:
@@ -157,10 +180,100 @@ const char* ButtonName(Input in) {
     case Input::PassTake: return "Square";
     case Input::Shoot: return "Triangle";
     case Input::Undo: return "Select";
-    case Input::Switch: return "L/R";
-    case Input::Quit: return "PS";
+    case Input::Switch: return "L";
+    case Input::Menu: return "Start";
+    case Input::Back: return "Circle";
     default: return "?";
     }
+}
+
+const char* ButtonSprite(Input in) {
+    switch (in) {
+    case Input::Confirm:
+    case Input::Yes: return "ButtonIcons_PlayStation_Cross";
+    case Input::Rest:
+    case Input::No:
+    case Input::Back: return "ButtonIcons_PlayStation_Circle";
+    case Input::PassTake: return "ButtonIcons_PlayStation_Square";
+    case Input::Shoot: return "ButtonIcons_PlayStation_Triangle";
+    case Input::Undo: return "ButtonIcons_PlayStation3_Select";
+    case Input::Menu: return "ButtonIcons_PlayStation3_Start";
+    case Input::Switch: return "ButtonIcons_PlayStation_L1";
+    case Input::Info: return "ButtonIcons_PlayStation_R1";
+    default: return nullptr;
+    }
+}
+
+bool CanQuit() { return false; }
+
+// the system message dialog over a blank screen, until OK is pressed
+void ShowError(const std::string& msg) {
+    SceMsgDialogUserMessageParam user{};
+    user.buttonType = SCE_MSG_DIALOG_BUTTON_TYPE_OK;
+    user.msg = reinterpret_cast<const SceChar8*>(msg.c_str());
+    SceMsgDialogParam param;
+    sceMsgDialogParamInit(&param);
+    param.mode = SCE_MSG_DIALOG_MODE_USER_MSG;
+    param.userMsgParam = &user;
+    if (sceMsgDialogInit(&param) < 0) return;
+    while (sceMsgDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
+        glClearColor(0.105f, 0.086f, 0.149f, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        vglSwapBuffers(GL_TRUE);
+    }
+    sceMsgDialogTerm();
+}
+
+// The user's own copy of the game: "Dungeon Deathball_Data" and UnityPlayer.dll from the PC folder
+std::string GameCopyDir() { return std::string(kDataDir) + "/game"; }
+std::string FontDir() { return "app0:assets"; }
+
+namespace {
+bool g_progressOpen = false;
+double g_progressShown = 0;
+std::string g_progressMsg;
+} // namespace
+
+// the system progress dialog; redrawn at most every 1/10 s (each redraw waits for vblank)
+void ShowProgress(const std::string& msg, float fraction) {
+    double now = Seconds();
+    if (g_progressOpen && msg == g_progressMsg && now - g_progressShown < 0.1) return;
+    sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT); // no auto-suspend: nobody touches the console meanwhile
+    if (!g_progressOpen) {
+        static SceMsgDialogProgressBarParam bar;
+        bar = SceMsgDialogProgressBarParam{};
+        bar.barType = SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE;
+        bar.msg = reinterpret_cast<const SceChar8*>("Installing the game data from your copy of Dungeon Deathball.\n"
+                                                    "This takes a few minutes, only once.");
+        SceMsgDialogParam param;
+        sceMsgDialogParamInit(&param);
+        param.mode = SCE_MSG_DIALOG_MODE_PROGRESS_BAR;
+        param.progBarParam = &bar;
+        if (sceMsgDialogInit(&param) < 0) return;
+        g_progressOpen = true;
+    }
+    if (msg != g_progressMsg) {
+        g_progressMsg = msg;
+        sceMsgDialogProgressBarSetMsg(SCE_MSG_DIALOG_PROGRESSBAR_TARGET_BAR_DEFAULT, reinterpret_cast<const SceChar8*>(g_progressMsg.c_str()));
+    }
+    sceMsgDialogProgressBarSetValue(SCE_MSG_DIALOG_PROGRESSBAR_TARGET_BAR_DEFAULT,
+                                    static_cast<SceUInt32>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100)));
+    g_progressShown = now;
+    glClearColor(0.105f, 0.086f, 0.149f, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    vglSwapBuffers(GL_TRUE);
+}
+
+void EndProgress() {
+    if (!g_progressOpen) return;
+    sceMsgDialogClose();
+    while (sceMsgDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
+        glClear(GL_COLOR_BUFFER_BIT);
+        vglSwapBuffers(GL_TRUE);
+    }
+    sceMsgDialogTerm();
+    g_progressOpen = false;
+    g_progressMsg.clear();
 }
 
 } // namespace dd::app::platform
