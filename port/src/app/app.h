@@ -214,7 +214,7 @@ private:
 // ---------------------------------------------------------------------------------------------
 enum class Screen {
     Title, Modes, NewGame, Teams, StageStart, Play, Pause, PauseConfirm, Options, Defeat, Flash, Results, Manage, ManageConfirm,
-    KeepGoing, Overwrite, Ending, HowToPlay, Achievements, SkullKeys, Unlocks,
+    KeepGoing, Overwrite, Ending, TrialComplete, HowToPlay, Achievements, SkullKeys, Unlocks,
     Intro,     // the Judgment's speech before the title (CutsceneController, "Intro" scene)
     TrialIntro, // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
     Credits     // MenuPage_Credits
@@ -316,6 +316,9 @@ private:
     void DrawBlackFade();
     bool DrawFlashCanvas();
     bool DrawDefeatCanvas();
+    bool DrawSkullKeysCanvas();
+    bool DrawTrialCompleteCanvas();
+    void BuildTimeline(ui::Canvas& c, int root, int dataRoot);
     int GameplayMenuPage(const char* page);
     void DrawGameplayMenu();
     std::string flashText_;

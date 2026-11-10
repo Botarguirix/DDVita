@@ -181,6 +181,12 @@ void App::Draw() {
     case Screen::Flash: DrawHud(); DrawFlash(); break;
     case Screen::Results: DrawResults(); break;
     case Screen::Manage: DrawManage(); break;
+    case Screen::TrialComplete:
+        if (st_.view) DrawStage(), ui_.Begin();
+        DrawBlackFade();
+        DrawTrialCompleteCanvas();
+        Hints(ui_, {{Input::Confirm, T("General/MenuNav_Continue", "Continue")}});
+        break;
     case Screen::ManageConfirm:
         DrawManage();
         DrawConfirm(T("Gameplay/Upgrades_ContinueConfirm_Hdr", "More Upgrades Available"),

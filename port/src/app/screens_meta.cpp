@@ -125,6 +125,10 @@ void App::DrawAchievements() {
 // UnlockPopupSkullKeys
 void App::DrawSkullKeys() {
     if (st_.view) DrawStage(), ui_.Begin();
+    if (gameUi_.loaded()) {
+        DrawBlackFade();
+        if (DrawSkullKeysCanvas()) return;
+    }
     ui_.Shade(0.6f);
     const float W = ui_.W(), H = ui_.H();
     int n = meta_.unreportedKeys;

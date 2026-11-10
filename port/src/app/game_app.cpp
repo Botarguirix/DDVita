@@ -289,7 +289,11 @@ void App::StageOver() {
 
 // StageEndUI.ResultsScreenHidden -> team management when the run goes on
 void App::AfterResults() {
-    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial()) Go(Screen::Manage);
+    // (DDVITA_TEST_TRIAL: the trial's page after any stage, for screenshots)
+    bool trialEnd = run_->currentStageIsLastInCurrentTrial() || (testing && std::getenv("DDVITA_TEST_TRIAL"));
+    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial() && trialEnd && prefabUi_.loaded())
+        Go(Screen::TrialComplete);
+    else if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial()) Go(Screen::Manage);
     else KeepGoingOrQuit();
 }
 
@@ -861,6 +865,9 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
         }
         break;
     }
+    case Screen::TrialComplete:
+        if (timer_ > 2.0f) inputs->push_back(Input::Confirm);
+        break;
     case Screen::Manage:
         if (timer_ < 1.5f) return;
         // buy what it can, column by column, then Done
@@ -1032,6 +1039,14 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
     case Screen::Manage:
         for (Input in : inputs)
             if (screen_ == Screen::Manage) InputManage(in);
+        break;
+    case Screen::TrialComplete: // mooDeathballStageEnd: on to the team
+        for (Input in : inputs)
+            if (in == Input::Confirm && timer_ > 0.5f) {
+                sound_.PlayCue("MenuSubmit");
+                Go(Screen::Manage);
+                break;
+            }
         break;
     case Screen::ManageConfirm: // More Upgrades Available: Continue / Back
         for (Input in : inputs) {
