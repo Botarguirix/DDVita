@@ -53,7 +53,7 @@ void App::FillAttackTooltip(ui::Canvas& c, int tip, const AttackConfig* cfg, int
     if (cfg) {
         if (shoot && !cfg->pierce && !cfg->wind) label = nullptr; // the shot: only what changes it
         else if (cfg->pierce) label = "Pierce", icon = "Icons_AttackPierce";
-        else if (cfg->wind) label = "Wind", icon = "Icons_AttackWind";
+        else if (cfg->wind) label = "Wind", icon = "Icons_Attack_Wind";
         else if (cfg->attackBehaviour == AttackBehaviour::Charge) label = "Charge", icon = "Icons_AttackCharge";
         else if (cfg->spawner()) label = "Spawn", icon = "Icons_AttackSpawn";
     }

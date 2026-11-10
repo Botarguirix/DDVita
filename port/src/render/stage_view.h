@@ -45,6 +45,7 @@ public:
         bool stunned;
     };
     std::vector<BarInfo> Bars() const;
+    bool ProjectTile(sim::V2 t, float* sx, float* sy) const;
     // Screen position (output pixels) of a world point; false when behind the camera.
     bool Project(Vec3 p, float* sx, float* sy) const;
     Vec3 ActorPosition(int uid) const;

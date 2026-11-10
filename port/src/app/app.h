@@ -335,13 +335,15 @@ private:
     bool DrawTrialCompleteCanvas();
     bool DrawHealthBars();
     bool DrawTeamInfoCanvas();
+    bool DrawGameplayPopups();
+    bool DrawSuggestUndoCanvas();
     void InputTeamInfo(Input in);
     void FillAttackTooltip(ui::Canvas& c, int tip, const AttackConfig* cfg, int damage, int knockback, int stun, bool shoot);
     void BuildTimeline(ui::Canvas& c, int root, int dataRoot);
     int GameplayMenuPage(const char* page);
     void DrawGameplayMenu();
     std::string flashText_;
-    bool showInfo_ = false, showLog_ = false, showPerf_ = false;
+    bool showInfo_ = true, showLog_ = false, showPerf_ = false;
     int metaTab_ = 0;
     float helpScroll_ = 0, helpMaxScroll_ = 0;
     std::vector<int> unlockPopups_;

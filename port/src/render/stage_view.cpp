@@ -334,6 +334,8 @@ void StageView::UpdateCamera(float dt) {
     cam_.eye = look - cam_.forward * dist;
 }
 
+bool StageView::ProjectTile(sim::V2 t, float* sx, float* sy) const { return Project(TileCenter(t), sx, sy); }
+
 bool StageView::Project(Vec3 p, float* sx, float* sy) const {
     Mat4 pv = cam_.Proj(static_cast<float>(r_.lowW()) / r_.lowH());
     Mat4 vv = cam_.View();

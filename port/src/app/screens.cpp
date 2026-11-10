@@ -316,7 +316,7 @@ void App::DrawHud() {
                 default: what = c.actionConfig->switchControl ? T("Gameplay/Action_SwitchPlayer", "Switch Player") : ""; break;
                 }
                 if (!settings_.actionPopups) what.clear(); // HelpPopup
-                if (c.staminaCost && settings_.commandCostPopups) // CommandTooltip
+                if (c.staminaCost && settings_.commandCostPopups && !gameUi_.loaded()) // CommandTooltip (the canvas one otherwise)
                     what += (what.empty() ? "" : "  ") + T("Gameplay/Stamina", "Stamina") + " " + std::to_string(c.staminaCost);
                 if (what.empty()) continue;
                 float y = H - ui_.LineHeight(ui::Small) - 30;
@@ -326,7 +326,7 @@ void App::DrawHud() {
     }
 
     // SuggestUndo popup
-    if (screen_ == Screen::Play && !st_.view->Busy() && g.phase() == Phase::SuggestUndo)
+    if (screen_ == Screen::Play && !st_.view->Busy() && g.phase() == Phase::SuggestUndo && !(gameUi_.loaded() && DrawSuggestUndoCanvas()))
         DrawConfirm(T("Gameplay/SuggestUndo_Hdr", "Undo Actions?"), T("Gameplay/SuggestUndo_Body", ""),
                     {T("Gameplay/Action_Undo", "Undo"), T("Gameplay/SuggestUndo_Cancel", "Ignore")}, sel2_);
 
@@ -343,7 +343,7 @@ void App::DrawHud() {
         ui_.Text(ui::Large, W * 0.5f, y + 4, trickIsTrick_ ? col::Purple : col::Orange, head, Align::Center);
         ui_.Text(ui::Small, W * 0.5f, y + 32, col::White, body, Align::Center);
     }
-    if (showInfo_ && screen_ == Screen::Play) DrawInfoPopup();
+    if (screen_ == Screen::Play && !(gameUi_.loaded() && DrawGameplayPopups()) && showInfo_) DrawInfoPopup();
 }
 
 // StageStartPanel: header, ball choice, the team and Play Deathball
