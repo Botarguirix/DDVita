@@ -70,7 +70,6 @@ add_library(ddsim STATIC
     src/sim/ai.cpp
     src/sim/game.cpp
     src/sim/describe.cpp
-    src/sim/meta.cpp
 )
 target_link_libraries(ddsim PUBLIC ddcore)
 if(NOT MSVC)
@@ -86,15 +85,7 @@ add_library(ddgamelib STATIC
     src/audio/mixer.cpp
     src/audio/sound.cpp
     src/app/game_app.cpp
-    src/app/help.cpp
-    src/app/meta.cpp
-    src/app/screens.cpp
-    src/app/screens_help.cpp
-    src/app/screens_meta.cpp
-    src/app/settings.cpp
     src/app/save.cpp
-    src/ui/text.cpp
-    src/ui/ui.cpp
 )
 target_link_libraries(ddgamelib PUBLIC ddsim ddinstalllib)
 if(NOT MSVC)
