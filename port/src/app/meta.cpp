@@ -313,6 +313,11 @@ int Meta::BestScore(int team, GameMode mode) const {
 void Meta::RunEnded(const Run& run, int team) {
     int score = run.GetFinalScoreTotal();
     newHighScore = false;
+    // the mode's best over every team before this run (Score.TryHighScore's per mode table)
+    prevModeBest = 0;
+    for (const TeamProgress& t : teams) prevModeBest = std::max(prevModeBest, t.best[static_cast<int>(run.mode) & 3]);
+    newModeHighScore = run.mode != GameMode::DailyChallenge && score > prevModeBest;
+    prevTeamBest = BestScore(team, run.mode);
     if (run.mode == GameMode::DailyChallenge) {
         const SeasonalEventConfig* sc = data_.SeasonalConfig(run.session.seasonalEvent);
         if (sc && sc->preventHighScoreSaving) return;

@@ -187,7 +187,9 @@ public:
     void OnStageEnded(const sim::Game& g) override;
     void OnPlayerAction(const sim::Game& g, const sim::Command& c) override;
     int teamIndex = 0;   // the run's team (Teams.currentTeam)
-    bool newHighScore = false;
+    bool newHighScore = false;     // the team's (or the daily challenge's)
+    bool newModeHighScore = false; // over every team
+    int prevModeBest = 0, prevTeamBest = 0;
 
 private:
     const GameData& data_;
@@ -268,6 +270,8 @@ public:
     static constexpr int kAchievementCols = 14; // AchievementGrid's GridLayoutGroup constraint
     int optionsPage_ = 0; // 0 main, 1 gameplay, 2 sound
     int OptionRows();
+    int ScreenIndex() const { return static_cast<int>(screen_); }
+    float ScreenTime() const { return timer_; }
     struct ToggleRow {
         const char* node;
         const char* key;
@@ -291,7 +295,7 @@ private:
     ui::Loc loc_;
     Help help_;
     // the original's menus (render/ui_title.json, ui_game.json: the scenes' Canvas trees)
-    ui::Canvas titleUi_, gameUi_, prefabUi_, optionsUi_; // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
+    ui::Canvas titleUi_, gameUi_, prefabUi_, optionsUi_, endingUi_; // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
     int hudMark_ = -1;                        // gameUi_'s own nodes; the HUD's instances follow
     std::vector<uint32_t> phaseColors_;
     bool DrawHudCanvas();
@@ -342,7 +346,9 @@ private:
     std::vector<int> HowToPlayButtons(const ui::Canvas& c, int page) const;
     void InputTeamInfo(Input in);
     void FillAttackTooltip(ui::Canvas& c, int tip, const AttackConfig* cfg, int damage, int knockback, int stun, bool shoot);
-    void BuildTimeline(ui::Canvas& c, int root, int dataRoot);
+    void BuildTimeline(ui::Canvas& c, int root, int dataRoot, int reveal = 12, bool survivalBonus = false);
+    bool DrawEndingCanvas();
+    float EndingDoneTime() const;
     int GameplayMenuPage(const char* page);
     void DrawGameplayMenu();
     std::string flashText_;

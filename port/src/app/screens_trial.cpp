@@ -27,7 +27,7 @@ constexpr int kStages = 12; // LeagueManager.totalNumberOfStages
 
 // FinalTimeline.Initialise into `dataRoot` of `c`; the lines need the nodes laid out, so `root` is
 // laid out once here
-void App::BuildTimeline(ui::Canvas& c, int root, int dataRoot) {
+void App::BuildTimeline(ui::Canvas& c, int root, int dataRoot, int reveal, bool survivalBonus) {
     const Run& run = *run_;
     ui::Canvas& p = prefabUi_;
     int played = run.stagesPlayed;
@@ -47,8 +47,10 @@ void App::BuildTimeline(ui::Canvas& c, int root, int dataRoot) {
         bool none = s >= played;
         int r = c.Instantiate(p, p.Find("TimelineNode_Image_Player"), c.Find("Nodes", ranks));
         c.SetSprite(c.Find("HideGroup", r), none ? "GameInfoIcons_StageNode_HollowFully" : kRankIcons[std::clamp(run.stageResults[s].rank, 0, 5)]);
+        c.SetActive(c.Find("HideGroup", r), s < reveal); // TimelineNode.ShowNode
         int t = c.Instantiate(p, p.Find("TimelineNode_Text_Score"), c.Find("Nodes", scores));
         c.SetText(c.Find("HideGroup/Text_S", t), none ? "-" : WithCommas(run.stageResults[s].score));
+        c.SetActive(c.Find("HideGroup", t), s < reveal);
     }
     label("TimelineElementLabel_Players", "Gameplay/Ending_Players", "Players");
     // a row per player (the team, then the dead), six at most
@@ -66,7 +68,10 @@ void App::BuildTimeline(ui::Canvas& c, int root, int dataRoot) {
         const gfx::RuntimeSprite& face = Portrait(*hp);
         c.SetRuntimeSprite(c.Find("LeftArea/Portrait/Sprite", e), &face.tex, face.def);
         c.SetImageColor(c.Find("LeftArea/Portrait/BG", e), hp->dead ? col::Rgb(115, 41, 48) : col::Rgb(157, 157, 157)); // arneRedDark / arneGreyLight
-        c.SetActive(c.Find("SurvivalBonus", e), false);
+        // TimelineElement.ShowPlayerSurvivalBonus (Score.GetPlayerSurvivalBonus)
+        c.SetActive(c.Find("SurvivalBonus", e), survivalBonus && !hp->dead);
+        c.SetText(c.Find("SurvivalBonus/Text_S (Label)", e), T("Gameplay/Ending_Survival", "Survival"));
+        c.SetText(c.Find("SurvivalBonus/Text_S (Score)", e), WithCommas((kStages - hp->stageStartedIndex) * data_.scoring.finalSurvivalBonusPerStage));
         for (int s = 0; s < kStages; s++) {
             int n = c.Instantiate(p, p.Find("TimelineNode_Image_Player"), c.Find("Nodes", e));
             // TimelineNodePlayer.GetStageIcon
@@ -76,8 +81,9 @@ void App::BuildTimeline(ui::Canvas& c, int root, int dataRoot) {
             else if ((hp->dead && s > hp->stageDiedIndex) || s < hp->stageStartedIndex) icon = "GameInfoIcons_StageNode_HollowFully";
             else if (!hp->dead && s + 1 == kStages) icon = "GameInfoIcons_PlayerSurvived";
             c.SetSprite(c.Find("HideGroup", n), icon);
+            c.SetActive(c.Find("HideGroup", n), s < reveal);
         }
-        int end = std::min(hp->dead ? hp->stageDiedIndex : current, kStages - 1);
+        int end = std::min({hp->dead ? hp->stageDiedIndex : current, kStages - 1, std::max(reveal - 1, hp->stageStartedIndex)});
         lines.push_back({e, c.Find("Line", e), hp->stageStartedIndex, end});
     }
     // TimelineElement.InitLine: from the first stage played to the last, behind the nodes

@@ -144,7 +144,7 @@ void App::Draw() {
     titleUi_.appear = gameUi_.appear = optionsUi_.appear = appear;
     bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams && screen_ != Screen::NewGame &&
                        screen_ != Screen::Achievements && screen_ != Screen::Unlocks && screen_ != Screen::Intro &&
-                       screen_ != Screen::TrialIntro && screen_ != Screen::Credits &&
+                       screen_ != Screen::TrialIntro && screen_ != Screen::Credits && !(screen_ == Screen::Ending && endingUi_.loaded()) &&
                        !(screen_ == Screen::HowToPlay && helpReturn_ == Screen::Title) &&
                        !(screen_ == Screen::Options && optionsReturn_ == Screen::Title);
     if (stageBehind) {
@@ -206,7 +206,10 @@ void App::Draw() {
         break;
     case Screen::KeepGoing: DrawKeepGoing(); break;
     case Screen::Overwrite: DrawOverwrite(); break;
-    case Screen::Ending: DrawEnding(); break;
+    case Screen::Ending:
+        if (!(endingUi_.loaded() && DrawEndingCanvas())) // (its own Continue button)
+            DrawEnding();
+        break;
     case Screen::HowToPlay: DrawHowToPlay(); break;
     case Screen::Achievements: DrawAchievements(); break;
     case Screen::SkullKeys: DrawSkullKeys(); break;

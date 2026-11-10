@@ -97,6 +97,7 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     titleUi_.Load(dataDir + "/render/ui_title.json");
     gameUi_.Load(dataDir + "/render/ui_game.json");
     prefabUi_.Load(dataDir + "/render/ui_prefabs.json");
+    endingUi_.Load(dataDir + "/render/ui_ending.json");
     optionsUi_.Load(dataDir + "/render/ui_options.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
@@ -292,6 +293,10 @@ void App::StageOver() {
 
 // StageEndUI.ResultsScreenHidden -> team management when the run goes on
 void App::AfterResults() {
+    if (testing && std::getenv("DDVITA_TEST_ENDING")) { // (the final results after any stage, for screenshots)
+        EndRun();
+        return;
+    }
     // (DDVITA_TEST_TRIAL: the trial's page after any stage, for screenshots)
     bool trialEnd = run_->currentStageIsLastInCurrentTrial() || (testing && std::getenv("DDVITA_TEST_TRIAL"));
     if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial() && trialEnd && prefabUi_.loaded()) {
@@ -921,7 +926,7 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
         inputs->push_back(Input::Back);
         break;
     case Screen::Ending: // stops the test (Frame returns false), after a moment on screen
-        if (timer_ > 3.0f) inputs->push_back(Input::Menu);
+        if (timer_ > (endingUi_.loaded() ? EndingDoneTime() : 0.0f) + 3.0f) inputs->push_back(Input::Menu);
         break;
     case Screen::Title:
     case Screen::Modes:
@@ -1184,7 +1189,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
         break;
     case Screen::Ending:
         for (Input in : inputs)
-            if ((in == Input::Confirm || in == Input::Menu) && timer_ > 1.0f) {
+            if ((in == Input::Confirm || in == Input::Menu) && endingUi_.loaded() && timer_ < EndingDoneTime()) {
+                timer_ = EndingDoneTime(); // mpaEndingResults: SkipButton
+                break;
+            } else if ((in == Input::Confirm || in == Input::Menu) && timer_ > 1.0f) {
                 sound_.PlayCue("MenuSubmit");
                 GoToTitle();
                 break;
@@ -1352,7 +1360,10 @@ int RunGame(int argc, char** argv) {
         app->Draw();
         r.Flush();
         bool quit = !keep;
-        if (!shotPath.empty() && app->clock >= shotTime) {
+        // DDVITA_SHOT_SCREEN=n: the shot's time counts from screen n (for screens reached at random times)
+        static const char* shotScreen = std::getenv("DDVITA_SHOT_SCREEN");
+        bool shotNow = shotScreen ? app->ScreenIndex() == std::atoi(shotScreen) && app->ScreenTime() >= shotTime : app->clock >= shotTime;
+        if (!shotPath.empty() && shotNow) {
             platform::SaveScreenshot(shotPath, ww, wh);
             std::printf("screenshot %s\n", shotPath.c_str());
             quit = true;
