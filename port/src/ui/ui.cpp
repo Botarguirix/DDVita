@@ -59,6 +59,22 @@ void Ui::SpriteTex(const gfx::Texture& tex, const gfx::SpriteDef& d, float x, fl
     r_.Rect(tex, ox_ + px * s_, oy_ + py * s_, dw * s_, dh * s_, u0, v0, u1, v1, color);
 }
 
+void Ui::Quad(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color) {
+    r_.Rect(tex, ox_ + x * s_, oy_ + y * s_, w * s_, h * s_, u0, v0, u1, v1, color);
+}
+
+void Ui::Clip(float x, float y, float w, float h) {
+    if (w <= 0 || h <= 0) r_.Clip(0, 0, 0, 0);
+    else r_.Clip(std::floor(ox_ + x * s_), std::floor(oy_ + y * s_), std::ceil(w * s_), std::ceil(h * s_));
+}
+
+FontSize Ui::FontFor(const std::string& fontName) {
+    // the installer rasterises these three (install/export_fonts.cpp)
+    if (fontName == "CompassGold") return Large;
+    if (fontName == "SinsGold") return Medium;
+    return Small; // EffortsPro and the rest
+}
+
 bool Ui::Sprite(const std::string& name, float x, float y, float w, float h, uint32_t color) {
     if (name.empty()) return false;
     const gfx::SpriteDef* d = assets_.Sprite(name);

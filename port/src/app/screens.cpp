@@ -139,7 +139,7 @@ void App::DrawConfirm(const std::string& header, const std::string& body, const 
 void App::Draw() {
     bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams &&
                        screen_ != Screen::Achievements && screen_ != Screen::Unlocks && screen_ != Screen::Intro &&
-                       screen_ != Screen::TrialIntro &&
+                       screen_ != Screen::TrialIntro && screen_ != Screen::Credits &&
                        !(screen_ == Screen::HowToPlay && helpReturn_ == Screen::Title) &&
                        !(screen_ == Screen::Options && optionsReturn_ == Screen::Title);
     if (stageBehind) {
@@ -188,6 +188,9 @@ void App::Draw() {
     case Screen::Unlocks: DrawTitle(); DrawUnlocks(); break;
     case Screen::Intro: DrawIntro(); break;
     case Screen::TrialIntro: DrawTrialIntro(); break;
+    case Screen::Credits:
+        if (!titleUi_.loaded() || !DrawTitleCanvas("MenuPage_Credits")) DrawTitle();
+        break;
     }
     DrawToast();
     DrawDebug();
@@ -636,8 +639,53 @@ void App::DrawEnding() {
 // ---------------------------------------------------------------------------------------------
 // Title and new game
 // ---------------------------------------------------------------------------------------------
+// TitleScreen: the original's Canvas_TitleScreen with MenuPage_MainMenu showing
+bool App::DrawTitleCanvas(const char* page) {
+    ui::Canvas& c = titleUi_;
+    int root = c.Find("Canvas_TitleScreen");
+    if (root < 0) return false;
+    int pages = c.Find("MenuPages", root);
+    for (int k : c.node(pages).kids) c.SetActive(k, c.node(k).name == page);
+    // what the original removes on this platform (web links, Steam leaderboards, Quit on consoles)
+    for (int i = 0; i < c.size(); i++)
+        for (const std::string& s : c.node(i).scripts)
+            if (s == "ExpireByPlatform" && !(platform::CanQuit() && c.node(i).name == "Quit")) c.SetActive(i, false);
+    c.SetActive(c.Find("MenuPages/MenuPage_MainMenu/WebLinks", root), false);
+    // EggTools.Credits: the text scrolls up at autoScrollSpeed (25) and starts over past maxY
+    if (int content = c.Find("MenuPages/MenuPage_Credits/PageArea/Credits/Content", root); content >= 0) {
+        float maxY = c.node(content).size[1] + 360.0f; // + AppConfig.lowResolution.y
+        c.node(content).pos[1] = screen_ == Screen::Credits ? std::fmod(timer_ * 25.0f, maxY) : 0.0f;
+    }
+    // the texts the original's scripts fill in (VersionTextLocalized, the spawned Options page button)
+    std::string version = std::to_string(data_.buildVersion.major) + "." + std::to_string(data_.buildVersion.minor) + "." +
+                          std::to_string(data_.buildVersion.patch);
+    c.SetText(c.Find("TitleScreenAnimator/Text_S_VersionText", root), ui::Format(T("FrontEnd/VersionNumber", "Version {value}"), {{"value", version}}));
+    // SeasonalEventImageSwapper: the season's logo
+    const char* logo = season_ == SeasonalEvent::Halloween ? "LogoParts_Full_Halloween" : season_ == SeasonalEvent::Easter ? "LogoParts_Full_Easter" : "LogoParts_Full";
+    c.SetSprite(c.Find("TitleScreenAnimator/TitleStrip/Logo", root), logo);
+    // the selected button's outline (SelectedOutline): rows Continue, New Game, How To Play, Stats, Options, Credits
+    int buttons = c.Find("MenuPages/MenuPage_MainMenu/PageArea/Buttons", root);
+    if (buttons >= 0) {
+        const auto& kids = c.node(buttons).kids;
+        for (size_t b = 0; b < kids.size(); b++) {
+            int outline = c.FindDeep("SelectedOutline", kids[b]);
+            c.SetActive(outline, static_cast<int>(b) == sel_);
+            int label = c.FindDeep("Label", kids[b]);
+            if (c.node(kids[b]).name == "Button (Options)") c.SetText(label, T("General/Options", "Options"));
+            // MenuObjectLocker: Continue is locked without a saved run
+            if (c.node(kids[b]).name == "Button (Continue)" && label >= 0) {
+                uint32_t base = c.node(label).baseTextColor;
+                c.SetTextColor(label, hasSave_ ? base : (base & 0x00ffffffu) | 0x60000000u);
+            }
+        }
+    }
+    c.Draw(ui_, root, loc_);
+    return true;
+}
+
 void App::DrawTitle() {
     const float W = ui_.W(), H = ui_.H();
+    if (titleUi_.loaded() && DrawTitleCanvas()) return;
     // TitleScreen: the logo (the season's own when it has one)
     const SeasonalEventConfig* sc = data_.SeasonalConfig(season_);
     std::string logo = season_ == SeasonalEvent::Halloween ? "LogoParts_Full_Halloween" : season_ == SeasonalEvent::Easter ? "LogoParts_Full_Easter" : "LogoParts_Full";

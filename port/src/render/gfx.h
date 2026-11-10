@@ -51,6 +51,8 @@ public:
     // Rect / Fill quads are batched per texture (one draw call per run instead of per glyph): drawn
     // when the texture or the GL state changes, and at the end of the frame by Flush().
     void Flush();
+    // 2D clipping rectangle in output pixels (origin top-left); w <= 0 turns it off
+    void Clip(float x, float y, float w, float h);
     int outW() const { return outW_; }
     int outH() const { return outH_; }
     int lowW() const { return lowW_; }

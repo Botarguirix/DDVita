@@ -94,6 +94,7 @@ add_library(ddgamelib STATIC
     src/app/save.cpp
     src/ui/text.cpp
     src/ui/ui.cpp
+    src/ui/canvas.cpp
 )
 target_link_libraries(ddgamelib PUBLIC ddsim ddinstalllib)
 if(NOT MSVC)

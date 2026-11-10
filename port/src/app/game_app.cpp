@@ -92,6 +92,8 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     if (!meta_.LoadDefs(dataDir + "/achievements.json")) std::fprintf(stderr, "no achievements.json: achievements are not shown\n");
     loc_.Load(dataDir + "/loc/en.json"); // language selection: meta milestone
     help_.Load(dataDir + "/help.json");
+    titleUi_.Load(dataDir + "/render/ui_title.json");
+    gameUi_.Load(dataDir + "/render/ui_game.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
     hasSave_ = RecordExists(savePath_);
@@ -160,7 +162,7 @@ void App::GoToTitle() {
     season_ = sc ? sc->seasonalEvent : SeasonalEvent::None;
     seasonJingleTimer_ = sc && season_ != SeasonalEvent::None && sc->titleScreenJingle ? 0.9f : -1;
     QueueUnlockPopups();
-    Go(unlockPopups_.empty() ? Screen::Title : Screen::Unlocks);
+    Go(unlockPopups_.empty() ? Screen::Title : Screen::Unlocks, hasSave_ ? 0 : 1);
 }
 
 void App::NewRun(GameMode mode, int team, int seed) {
@@ -349,32 +351,30 @@ void App::EndRun() {
 // Input
 // ---------------------------------------------------------------------------------------------
 void App::InputTitle(Input in) {
-    // rows: Continue (when saved), New Game, How to Play, Stats & Achievements, Options, Quit (PC)
-    std::vector<int> rows;
-    if (hasSave_) rows.push_back(0);
-    rows.push_back(1);
-    rows.push_back(4);
-    rows.push_back(5);
-    rows.push_back(2);
-    if (platform::CanQuit()) rows.push_back(3);
-    if (Nav(in, &sel_, static_cast<int>(rows.size()))) sound_.PlayCue("MenuMove");
+    // MenuPage_MainMenu's buttons, all always there: Continue (locked without a saved run),
+    // New Game, How to Play, Stats & Achievements, Options, Credits
+    if (Nav(in, &sel_, 6)) sound_.PlayCue("MenuMove");
     if (in != Input::Confirm) return;
+    if (sel_ == 0 && !hasSave_) { // MenuObjectLocker (LockCondition.SessionSaveDataDoesNotExist)
+        sound_.PlayCue("MenuInvalid");
+        return;
+    }
     sound_.PlayCue("MenuSubmit");
-    switch (rows[static_cast<size_t>(sel_)]) {
+    switch (sel_) {
     case 0:
         if (!ContinueRun()) hasSave_ = false;
         break;
     case 1: Go(Screen::Modes); break;
-    case 2:
-        optionsReturn_ = Screen::Title;
-        Go(Screen::Options);
-        break;
-    case 3: Go(Screen::Title, -1); break; // -1: quit (Frame returns false)
-    case 4: OpenHowToPlay(Screen::Title); break;
-    case 5:
+    case 2: OpenHowToPlay(Screen::Title); break;
+    case 3:
         metaTab_ = 0;
         Go(Screen::Achievements);
         break;
+    case 4:
+        optionsReturn_ = Screen::Title;
+        Go(Screen::Options);
+        break;
+    case 5: Go(Screen::Credits); break;
     }
 }
 
@@ -382,7 +382,7 @@ void App::InputTitle(Input in) {
 void App::InputAchievements(Input in) {
     if (in == Input::Menu || IsBack(in)) {
         sound_.PlayCue("MenuCancel");
-        Go(Screen::Title, hasSave_ ? 3 : 2);
+        Go(Screen::Title, 3);
         return;
     }
     if (in == Input::Switch || (metaTab_ == 1 && in == Input::Confirm)) {
@@ -435,7 +435,7 @@ void App::InputHowToPlay(Input in) {
         sound_.PlayCue("MenuCancel");
         ClearHelpSprites();
         // back to the How to Play entry of the menu it came from
-        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : (hasSave_ ? 2 : 1));
+        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : 2);
         return;
     }
     if (Nav(in, &sel_, HelpPageCount())) {
@@ -453,7 +453,7 @@ void App::InputModes(Input in) {
     if (Nav(in, &sel_, 4)) sound_.PlayCue("MenuMove");
     if (IsBack(in)) {
         sound_.PlayCue("MenuCancel");
-        Go(Screen::Title, hasSave_ ? 1 : 0);
+        Go(Screen::Title, 1);
         return;
     }
     if (in != Input::Confirm) return;
@@ -665,7 +665,7 @@ void App::InputOptions(Input in) {
         sound_.PlayCue("MenuCancel");
         if (!testing) settings_.Save(settingsPath_);
         Screen back = optionsReturn_;
-        Go(back, back == Screen::Pause ? 2 : back == Screen::Title ? (hasSave_ ? 4 : 3) : 0);
+        Go(back, back == Screen::Pause ? 2 : back == Screen::Title ? 4 : 0);
         return;
     }
     if (float* v = Volume(sel_)) {
@@ -1009,6 +1009,14 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 } else {
                     timer_ = 0;
                 }
+                break;
+            }
+        break;
+    case Screen::Credits:
+        for (Input in : inputs)
+            if (in == Input::Menu || IsBack(in) || in == Input::Confirm) {
+                sound_.PlayCue("MenuCancel");
+                Go(Screen::Title, 5);
                 break;
             }
         break;

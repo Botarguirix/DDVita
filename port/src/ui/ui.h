@@ -69,6 +69,12 @@ public:
     // A sprite fitted into the box (keeps its aspect, pixel snapped); false when it is missing.
     bool Sprite(const std::string& name, float x, float y, float w, float h, uint32_t color = col::White);
     void SpriteTex(const gfx::Texture& tex, const gfx::SpriteDef& def, float x, float y, float w, float h, uint32_t color = col::White);
+    // A textured quad in virtual coordinates with explicit UVs (no fitting)
+    void Quad(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color);
+    // Clip drawing to a virtual rectangle (w <= 0: off)
+    void Clip(float x, float y, float w, float h);
+    // The menu font for a font asset of the game (SinsGold, CompassGold, EffortsPro...)
+    static FontSize FontFor(const std::string& fontName);
 
     // ---- text ----
     float LineHeight(FontSize f) const;

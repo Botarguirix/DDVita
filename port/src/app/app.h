@@ -24,6 +24,7 @@
 #include "render/gfx.h"
 #include "render/stage_view.h"
 #include "sim/sim.h"
+#include "ui/canvas.h"
 #include "ui/ui.h"
 
 namespace dd::app {
@@ -212,7 +213,8 @@ enum class Screen {
     Title, Modes, Teams, StageStart, Play, Pause, PauseConfirm, Options, Defeat, Flash, Results, Manage, ManageConfirm,
     KeepGoing, Overwrite, Ending, HowToPlay, Achievements, SkullKeys, Unlocks,
     Intro,     // the Judgment's speech before the title (CutsceneController, "Intro" scene)
-    TrialIntro // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
+    TrialIntro, // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
+    Credits     // MenuPage_Credits
 };
 
 // One stage on screen: the simulation, its view and the player's cursor.
@@ -267,6 +269,9 @@ private:
     ui::Ui ui_;
     ui::Loc loc_;
     Help help_;
+    // the original's menus (render/ui_title.json, ui_game.json: the scenes' Canvas trees)
+    ui::Canvas titleUi_, gameUi_;
+    bool DrawTitleCanvas(const char* page = "MenuPage_MainMenu"); // false without Canvas trees (older install)
     Meta meta_;
     Settings settings_;
     std::string savePath_, settingsPath_, metaPath_;

@@ -208,6 +208,17 @@ void Renderer::Rect(const Texture& tex, float x, float y, float w, float h, floa
     batch_.insert(batch_.end(), v, v + 6);
 }
 
+void Renderer::Clip(float x, float y, float w, float h) {
+    Flush();
+    if (w <= 0 || h <= 0) {
+        glDisable(GL_SCISSOR_TEST);
+        return;
+    }
+    glEnable(GL_SCISSOR_TEST);
+    // GL's scissor origin is bottom-left
+    glScissor(static_cast<int>(x), static_cast<int>(outH_ - y - h), static_cast<int>(w), static_cast<int>(h));
+}
+
 void Renderer::Fill(float x, float y, float w, float h, uint32_t c) { Rect(white_, x, y, w, h, 0, 0, 1, 1, c); }
 
 } // namespace dd::gfx

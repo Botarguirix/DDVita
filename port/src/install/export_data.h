@@ -11,6 +11,8 @@ bool ExportGamedata(const GameFiles& g, const Extracted& ex, const std::string& 
 bool ExportLoc(const Extracted& ex, const std::string& outDir, std::string* err); // <outDir>/<locale>.json
 bool ExportHelp(const GameFiles& g, const Extracted& ex, const std::string& outPath, std::string* err);
 bool ExportAchievements(const GameFiles& g, const Extracted& ex, const std::string& outPath, std::string* err);
+// A scene's Canvas trees (render/ui_*.json). Needs the MonoBehaviours' full script trees.
+bool ExportUi(const GameFiles& g, const Extracted& ex, const std::string& sceneFile, const std::string& outPath, std::string* err);
 
 // Only what the exporters (data, render, audio) read: their scene classes, no skipped configs
 ExtractFilter ExportFilter();
