@@ -143,7 +143,7 @@ if(VITA)
     target_link_libraries(ddvita PRIVATE ddgamelib
         vitaGL vitashark SceShaccCgExt mathneon taihen_stub SceShaccCg_stub
         SceKernelDmacMgr_stub SceCommonDialog_stub SceGxm_stub SceDisplay_stub SceSysmodule_stub SceAppMgr_stub
-        SceCtrl_stub SceAudio_stub ScePower_stub SceRtc_stub SceIme_stub SceLibKernel_stub
+        SceCtrl_stub SceTouch_stub SceAudio_stub ScePower_stub SceRtc_stub SceIme_stub SceLibKernel_stub
         pthread m c)
     # room after the text segment for the tables vita-elf-create appends (see vita/gap.ld)
     target_link_options(ddvita PRIVATE "-Wl,-T,${CMAKE_SOURCE_DIR}/vita/gap.ld")

@@ -141,8 +141,9 @@ bool App::DrawHealthBars() {
         int n = c.Instantiate(prefabUi_, prefab, root);
         ui::CNode& nd = c.node(n);
         nd.amin[0] = nd.amin[1] = nd.amax[0] = nd.amax[1] = 0.5f;
-        nd.pos[0] = (b.x - cx) * k;
+        nd.pos[0] = (b.x - cx) * k - 7; // the bar and its number panel centred over the actor
         nd.pos[1] = (cy - b.y) * k;
+        nd.scale[0] = nd.scale[1] = 0.85f;
         int hg = c.Find("HealthBar_HideGroup", n);
         c.SetActive(hg, true);
         float f = b.maxHealth > 0 ? std::clamp(static_cast<float>(b.health) / b.maxHealth, 0.0f, 1.0f) : 0.0f;
@@ -151,6 +152,13 @@ bool App::DrawHealthBars() {
         c.SetText(c.Find("Numbers_BG/Text_M", hg), std::to_string(b.health));
         int ao = c.Find("ActOrder_HideGroup - DELETE ME", n);
         c.SetActive(ao, b.actOrder >= 0);
+        if (ao >= 0) { // a small tag under the number panel instead of a strip as wide as the bar
+            ui::CNode& a = c.node(ao);
+            a.amin[0] = a.amax[0] = 0;
+            a.pos[0] = 13;
+            a.size[0] = 26;
+            a.size[1] = 11;
+        }
         if (b.actOrder >= 0) c.SetText(c.Find("Text_M", ao), std::to_string(b.actOrder) + (b.stunned ? " z" : ""));
     }
     c.Draw(ui_, root, loc_);

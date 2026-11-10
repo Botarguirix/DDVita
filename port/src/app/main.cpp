@@ -45,6 +45,7 @@ Input FromKey(SDL_Keycode k) {
     case SDLK_ESCAPE: return Input::Menu;
     case SDLK_BACKSPACE: return Input::Back;
     case SDLK_i: return Input::Info;
+    case SDLK_h: return Input::Bars;
     default: return Input::None;
     }
 }

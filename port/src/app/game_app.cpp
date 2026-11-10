@@ -64,6 +64,7 @@ Input ScriptKey(char k) {
     case 'Z': return Input::Rest;
     case 'X': return Input::Undo;
     case 'I': return Input::Info;
+    case 'H': return Input::Bars;
     default: return Input::None;
     }
 }
@@ -630,6 +631,11 @@ void App::InputPlay(const std::vector<Input>& inputs, bool idle) {
             sound_.PlayCue("MenuSubmit");
             Go(Screen::Pause);
             return;
+        }
+        if (in == Input::Bars) { // the port's health bars: the rear touch pad (H on PC) shows / hides them
+            settings_.healthBars = !settings_.healthBars;
+            sound_.PlayCue(settings_.healthBars ? "MenuSubmit" : "MenuCancel");
+            continue;
         }
         if (in == Input::Info) { // "View more info": the popup follows the cursor until toggled off
             showInfo_ = !showInfo_;

@@ -14,6 +14,7 @@
 // usual requirement of vitaGL homebrew).
 #include <psp2/audioout.h>
 #include <psp2/ctrl.h>
+#include <psp2/touch.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/message_dialog.h>
@@ -74,6 +75,7 @@ bool Init(int* width, int* height, std::string*) {
     scePowerSetGpuXbarClockFrequency(166);
     vglInitExtended(0, 960, 544, 16 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
     sceIoMkdir(kDataDir, 0777);
     *width = 960;
     *height = 544;
@@ -134,6 +136,14 @@ bool Poll(std::vector<Input>* inputs, int* width, int* height) {
         g_selectCombo = false;
     }
     g_prev = b;
+    // a tap on the rear touch pad (a new touch) toggles the health bars
+    static bool touching = false;
+    SceTouchData touch{};
+    if (sceTouchPeek(SCE_TOUCH_PORT_BACK, &touch, 1) > 0) {
+        bool now = touch.reportNum > 0;
+        if (now && !touching) inputs->push_back(Input::Bars);
+        touching = now;
+    }
     return true;
 }
 
