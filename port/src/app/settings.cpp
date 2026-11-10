@@ -23,11 +23,13 @@ bool Settings::Load(const std::string& path) {
     vol("sounds", &sounds);
     vol("voices", &voices);
     suggestUndo = j.value("suggestUndo", suggestUndo);
+    autoSkipCinematics = j.value("autoSkipCinematics", autoSkipCinematics);
     return true;
 }
 
 bool Settings::Save(const std::string& path) const {
-    json j = {{"master", master}, {"music", music}, {"jingles", jingles}, {"sounds", sounds}, {"voices", voices}, {"suggestUndo", suggestUndo}};
+    json j = {{"master", master}, {"music", music}, {"jingles", jingles}, {"sounds", sounds}, {"voices", voices}, {"suggestUndo", suggestUndo},
+              {"autoSkipCinematics", autoSkipCinematics}};
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f << j.dump(1);

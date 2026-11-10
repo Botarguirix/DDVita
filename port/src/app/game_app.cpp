@@ -239,6 +239,19 @@ void App::StartStage() {
     rec_.current.swap = run_->swapPositions;
     rec_.current.carrier = run_->ballCarrierIndex;
     defeat_ = false;
+    if (trialIntroPending_) {
+        trialIntroPending_ = false;
+        // TrialIntro.GetEnemiesFromTrial: the trial's monsters in tile order, up to five
+        trialLineup_.clear();
+        for (const Stage& stage : run_->session.trials[static_cast<size_t>(run_->currentTrial)].stages)
+            for (const TileData& t : stage.tiles)
+                if (t.enemyConfig && trialLineup_.size() < 5 &&
+                    std::find(trialLineup_.begin(), trialLineup_.end(), t.enemyConfig) == trialLineup_.end())
+                    trialLineup_.push_back(t.enemyConfig);
+        sound_.FadeOutMusic(0.5f);
+        Go(Screen::TrialIntro, 0);
+        return;
+    }
     Go(Screen::StageStart, 0);
 }
 
@@ -304,6 +317,8 @@ void App::NextStage(bool saveAndQuit) {
     rec_.restartUsed = false; // LeagueManager.IncrementStage
     run_->AdvanceStage();
     run_->swapPositions = false;
+    // GameFlow.NextStage: a new trial opens with its intro (unless cinematics are skipped)
+    trialIntroPending_ = run_->currentStage == 0 && !settings_.autoSkipCinematics && !testing;
     sound_.IncrementStageMusicIndex();
     rec_.current = StageRecord{};
     rec_.current.ball = static_cast<int>(run_->ballEffect);
@@ -389,6 +404,23 @@ void App::InputAchievements(Input in) {
         sel_ = s;
         sound_.PlayCue("MenuMove");
     }
+}
+
+void App::StartIntro() {
+    if (settings_.autoSkipCinematics || testing) {
+        GoToTitle();
+        return;
+    }
+    sound_.PlayNamedMusic("music.boss", 0.5f, 2.0f);
+    Go(Screen::Intro);
+}
+
+// CutsceneController / TrialIntro: Confirm, Start or Back skip
+void App::InputCinematic(Input in) {
+    if ((in != Input::Confirm && in != Input::Menu && !IsBack(in)) || timer_ < 0.3f) return;
+    sound_.PlayCue("MenuSubmit");
+    if (screen_ == Screen::Intro) GoToTitle();
+    else Go(Screen::StageStart, 0);
 }
 
 void App::OpenHowToPlay(Screen from) {
@@ -646,7 +678,10 @@ void App::InputOptions(Input in) {
         settings_.suggestUndo = !settings_.suggestUndo;
         if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
         sound_.PlayCue("MenuSubmit");
-    } else if (sel_ == 6 && in == Input::Confirm) { // mooDeathballRestoreDefaultSettings
+    } else if (sel_ == 6 && (in == Input::Confirm || in == Input::Left || in == Input::Right)) {
+        settings_.autoSkipCinematics = !settings_.autoSkipCinematics;
+        sound_.PlayCue("MenuSubmit");
+    } else if (sel_ == 7 && in == Input::Confirm) { // mooDeathballRestoreDefaultSettings
         settings_ = Settings{};
         settings_.Apply(mixer_);
         if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
@@ -977,6 +1012,12 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 break;
             }
         break;
+    case Screen::Intro:
+    case Screen::TrialIntro:
+        for (Input in : inputs) InputCinematic(in);
+        if (screen_ == Screen::Intro && timer_ > 5 * 3.4f + 1.0f) GoToTitle();
+        else if (screen_ == Screen::TrialIntro && timer_ > 5.0f) Go(Screen::StageStart, 0);
+        break;
     case Screen::Ending:
         for (Input in : inputs)
             if ((in == Input::Confirm || in == Input::Menu) && timer_ > 1.0f) {
@@ -1116,7 +1157,7 @@ int RunGame(int argc, char** argv) {
         app->NewRun(pos.size() > 2 ? static_cast<GameMode>(std::atoi(pos[2].c_str())) : GameMode::Normal,
                     pos.size() > 3 ? std::atoi(pos[3].c_str()) : 0, std::atoi(mode.c_str()));
     } else {
-        app->GoToTitle();
+        app->StartIntro();
     }
 
     double last = platform::Seconds();

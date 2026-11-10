@@ -31,6 +31,7 @@ namespace dd::app {
 struct Settings {
     float master = 0.7f, music = 0.7f, jingles = 0.7f, sounds = 0.7f, voices = 1.0f;
     bool suggestUndo = true;
+    bool autoSkipCinematics = false; // AppSettingsDeathball.pref_autoSkipCinematics
     bool Load(const std::string& path);
     bool Save(const std::string& path) const;
     void Apply(audio::Mixer& mixer) const;
@@ -193,7 +194,9 @@ private:
 // ---------------------------------------------------------------------------------------------
 enum class Screen {
     Title, Modes, Teams, StageStart, Play, Pause, PauseConfirm, Options, Defeat, Flash, Results, Manage, ManageConfirm,
-    KeepGoing, Overwrite, Ending, HowToPlay, Achievements, SkullKeys, Unlocks
+    KeepGoing, Overwrite, Ending, HowToPlay, Achievements, SkullKeys, Unlocks,
+    Intro,     // the Judgment's speech before the title (CutsceneController, "Intro" scene)
+    TrialIntro // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
 };
 
 // One stage on screen: the simulation, its view and the player's cursor.
@@ -234,7 +237,8 @@ public:
     void Draw();
 
     static constexpr int kAchievementCols = 12;
-    static constexpr int kOptionRows = 7; // 5 volumes, Suggest Undo, Restore Defaults
+    static constexpr int kOptionRows = 8; // 5 volumes, Suggest Undo, Auto Skip Cinematics, Restore Defaults
+    void StartIntro(); // the boot cutscene, unless cinematics are skipped
     static constexpr int kMusicPopup = 100;
     static constexpr float kToastTime = 3.0f;
 
@@ -274,6 +278,9 @@ private:
     int trickEvent_ = 0;
     bool trickIsTrick_ = false;
     float trickTimer_ = 0, toastTimer_ = 0, autoDelay_ = 0;
+    bool trialIntroPending_ = false;
+    std::vector<const EnemyConfig*> trialLineup_; // TrialIntro.GetEnemiesFromTrial
+    void InputCinematic(Input in);
 
     // ---- portraits (SpriteMaker) of the run's players, made on demand ----
     std::map<int, gfx::RuntimeSprite> portraits_;
@@ -347,6 +354,8 @@ private:
     void DrawSkullKeys();
     void DrawUnlocks();
     void DrawToast();
+    void DrawIntro();
+    void DrawTrialIntro();
     void DrawDebug();
     void DrawPlayerCard(const sim::HumanPlayer& hp, float x, float y, float w, bool selected, int selRow);
     std::string ButtonLabel(Input in) const;

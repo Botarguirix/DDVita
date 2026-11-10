@@ -138,7 +138,8 @@ void App::DrawConfirm(const std::string& header, const std::string& body, const 
 // ---------------------------------------------------------------------------------------------
 void App::Draw() {
     bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams &&
-                       screen_ != Screen::Achievements && screen_ != Screen::Unlocks &&
+                       screen_ != Screen::Achievements && screen_ != Screen::Unlocks && screen_ != Screen::Intro &&
+                       screen_ != Screen::TrialIntro &&
                        !(screen_ == Screen::HowToPlay && helpReturn_ == Screen::Title) &&
                        !(screen_ == Screen::Options && optionsReturn_ == Screen::Title);
     if (stageBehind) {
@@ -185,6 +186,8 @@ void App::Draw() {
     case Screen::Achievements: DrawAchievements(); break;
     case Screen::SkullKeys: DrawSkullKeys(); break;
     case Screen::Unlocks: DrawTitle(); DrawUnlocks(); break;
+    case Screen::Intro: DrawIntro(); break;
+    case Screen::TrialIntro: DrawTrialIntro(); break;
     }
     DrawToast();
     DrawDebug();
@@ -395,9 +398,11 @@ void App::DrawOptions() {
             float v = *Volume(i);
             int steps = static_cast<int>(std::round(v * 10));
             for (int k = 0; k < 10; k++) ui_.Fill(x + w - 150 + k * 12, ry + 7, 9, 10, k < steps ? col::Yellow : col::DarkGrey);
-        } else if (i == 5) {
-            ui_.Text(ui::Medium, x + 24, ry + 4, col::White, T("General/Setting_SuggestUndo", "Suggest Undo"));
-            ui_.Text(ui::Medium, x + w - 30, ry + 4, settings_.suggestUndo ? col::Green : col::Grey, settings_.suggestUndo ? "ON" : "OFF", Align::Right);
+        } else if (i == 5 || i == 6) {
+            bool v = i == 5 ? settings_.suggestUndo : settings_.autoSkipCinematics;
+            ui_.Text(ui::Medium, x + 24, ry + 4, col::White,
+                     i == 5 ? T("General/Setting_SuggestUndo", "Suggest Undo") : T("General/Setting_AutoSkipCinematics", "Auto Skip Cinematics"));
+            ui_.Text(ui::Medium, x + w - 30, ry + 4, v ? col::Green : col::Grey, v ? "ON" : "OFF", Align::Right);
         } else {
             ui_.Text(ui::Medium, x + w * 0.5f, ry + 4, col::White, T("General/Setting_RestoreDefaults", "Restore Defaults"), Align::Center);
         }
@@ -793,6 +798,77 @@ void App::DrawTeams() {
     }
     Hints(ui_, {{Input::Confirm, tp.unlocked ? T("FrontEnd/Teams_SelectTeam", "Select Team") : T("FrontEnd/Teams_UnlockTeam", "Unlock Team")},
                 {Input::Back, T("General/MenuNav_Back", "Back")}});
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cinematics
+// ---------------------------------------------------------------------------------------------
+// The "Intro" scene: the Judgment under a spotlight, one line of his speech after another
+void App::DrawIntro() {
+    const float W = ui_.W(), H = ui_.H();
+    ui_.Fill(0, 0, W, H, col::Black);
+    const float lineTime = 3.4f;
+    int line = std::min(4, static_cast<int>(timer_ / lineTime));
+    float t = timer_ - line * lineTime;
+    float fade = std::min(1.0f, timer_ / 1.0f);
+    uint32_t tint = PackColor(fade, fade, fade, 1);
+    ui_.Sprite("Spotlight", W * 0.5f - 140, 0, 280, H * 0.8f, PackColor(1, 1, 1, 0.35f * fade));
+    float bx = W * 0.5f - 90, by = H * 0.12f;
+    ui_.Sprite("SkullLord_Intro_Body_0", bx, by + 40, 180, 180, tint);
+    // the mouth moves while the line is being typed
+    size_t chars = static_cast<size_t>(std::max(0.0f, t - 0.3f) * 32);
+    std::string full = T("FrontEnd/IntroDialogue_" + std::to_string(line + 1), "");
+    bool talking = chars < full.size();
+    const char* head = !talking ? "SkullLord_Intro_Head_Closed"
+                       : (static_cast<int>(timer_ * 8) % 3 == 0 ? "SkullLord_Intro_Head_Open"
+                          : static_cast<int>(timer_ * 8) % 3 == 1 ? "SkullLord_Intro_Head_Mid"
+                                                                    : "SkullLord_Intro_Head_Closed");
+    ui_.Sprite(head, bx + 30, by, 120, 120, tint);
+    if (line == 2) ui_.Sprite("SkullLord_Intro_BallHand", bx + 120, by + 110, 80, 80, tint);
+    // the line, typed out (UTF-8 safe: cut at a character boundary)
+    std::string shown = full.substr(0, std::min(chars, full.size()));
+    while (!shown.empty() && (static_cast<unsigned char>(shown.back()) & 0xc0) == 0x80) shown.pop_back();
+    float ty = H * 0.78f;
+    for (const std::string& l : ui_.Wrap(ui::Medium, shown, W - 80)) {
+        ui_.Text(ui::Medium, W * 0.5f, ty, col::White, l, Align::Center);
+        ty += ui_.LineHeight(ui::Medium) + 4;
+    }
+    float lh = ui_.LineHeight(ui::Small);
+    float hx = W - 90, hy = H - lh - 8;
+    hx += ui_.Prompt(hx, hy, platform::ButtonName(Input::Confirm), platform::ButtonSprite(Input::Confirm)) + 2;
+    ui_.Text(ui::Small, hx, hy, col::Grey, "Skip");
+}
+
+// TrialIntro: the trial's monsters in silhouette, then revealed under spotlights
+void App::DrawTrialIntro() {
+    const float W = ui_.W(), H = ui_.H();
+    ui_.Fill(0, 0, W, H, col::Black);
+    const float revealAt = 1.4f;
+    bool revealed = timer_ >= revealAt;
+    static float lastReveal = -1;
+    if (revealed && lastReveal < revealAt && timer_ - revealAt < 0.1f) sound_.PlayJingle("jingle.enemiesAppear");
+    lastReveal = timer_;
+    if (revealed) {
+        const TrialData* td = run_->currentTrial < static_cast<int>(data_.session.trials.size())
+                                  ? &data_.session.trials[static_cast<size_t>(run_->currentTrial)] : nullptr;
+        float shake = timer_ - revealAt < 0.3f ? std::sin(timer_ * 90.0f) * 3.0f : 0.0f; // CameraShake
+        ui_.Text(ui::Large, W * 0.5f + shake, 30, col::Yellow,
+                 ui::Format(T("Gameplay/TrialCount", "Trial {0.value} of {1.maxValue}"), {{"value", ui::Int(run_->currentTrial + 1)}, {"maxValue", "4"}}),
+                 Align::Center);
+        if (td && !td->trialName.empty()) ui_.Text(ui::Medium, W * 0.5f, 62, col::White, td->trialName, Align::Center);
+    }
+    size_t n = trialLineup_.size();
+    float cell = std::min(150.0f, (W - 40) / std::max<size_t>(1, n));
+    float x0 = std::floor((W - cell * n) * 0.5f), y = H * 0.36f;
+    for (size_t i = 0; i < n; i++) {
+        const EnemyConfig* e = trialLineup_[i];
+        float x = x0 + static_cast<float>(i) * cell;
+        if (revealed) ui_.Sprite("Spotlight", x + cell * 0.1f, y - 60, cell * 0.8f, 200, PackColor(1, 1, 1, 0.3f));
+        // TrialIntroNewEnemy: they take turns to attack once revealed
+        float bob = revealed && static_cast<int>((timer_ - revealAt) * 2 + i) % 4 == 0 ? -4.0f : 0.0f;
+        ui_.Sprite(e->sprite, x + 8, y + bob, cell - 16, cell - 16, revealed ? col::White : PackColor(0.06f, 0.06f, 0.06f, 1));
+        if (revealed) ui_.Text(ui::Small, x + cell * 0.5f, y + cell - 8, col::Grey, e->actorName, Align::Center);
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
