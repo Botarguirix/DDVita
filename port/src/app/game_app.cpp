@@ -293,8 +293,10 @@ void App::StageOver() {
 void App::AfterResults() {
     // (DDVITA_TEST_TRIAL: the trial's page after any stage, for screenshots)
     bool trialEnd = run_->currentStageIsLastInCurrentTrial() || (testing && std::getenv("DDVITA_TEST_TRIAL"));
-    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial() && trialEnd && prefabUi_.loaded())
+    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial() && trialEnd && prefabUi_.loaded()) {
         Go(Screen::TrialComplete);
+        sound_.PlayJingle("jingle.trialComplete"); // TrialCompleteTimeline.Show
+    }
     else if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial()) Go(Screen::Manage);
     else KeepGoingOrQuit();
 }

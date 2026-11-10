@@ -130,7 +130,7 @@ ExtractFilter ExportFilter() {
     f.skipConfigs = kSkipConfigClasses;
     for (const char* c : kSceneSingletons) f.sceneClasses.insert(c);
     // help.json's popups, achievements.json's list, audio.json's crowd
-    for (const char* c : {"EnemyInfoPopup", "PlayerStatsPopup", "AttackTooltip", "AchievementManagerDeathball", "CrowdAudio"})
+    for (const char* c : {"EnemyInfoPopup", "PlayerStatsPopup", "AttackTooltip", "AchievementManagerDeathball", "CrowdAudio", "TrialCompleteTimeline"})
         f.sceneClasses.insert(c);
     return f;
 }
