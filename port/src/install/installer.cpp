@@ -12,10 +12,10 @@ namespace dd::install {
 
 namespace {
 
-// render v2: the arenas' Billboard props; ui 1: the menus' Canvas trees, 2: + the gameplay UI prefabs
+// render v2: the arenas' Billboard props; ui 1: the menus' Canvas trees, 2: + the gameplay UI prefabs, 3: + the options pages
 const json kVersion = {{"format", 1},
                        {"steps", {{"extract", 1}, {"gamedata", 1}, {"render", 2}, {"fonts", 1}, {"loc", 1},
-                                  {"help", 1}, {"achievements", 1}, {"audio", 2}, {"ui", 2}}}};
+                                  {"help", 1}, {"achievements", 1}, {"audio", 2}, {"ui", 3}}}};
 
 std::string FindDataDir(const std::string& gameDir) {
     for (const std::string& d : ListDir(gameDir, true)) {
@@ -79,7 +79,9 @@ static bool InstallSteps(const std::string& gameDir, const std::string& outDir, 
         ok = ok && ExportUi(g, ex, "level3", outDir + "/render/ui_title.json", err) &&
              ExportUi(g, ex, "level4", outDir + "/render/ui_game.json", err) &&
              // the gameplay scene's UI prefabs (PlayerInfoPanel, the turn nodes, popups...)
-             ExportUi(g, ex, "sharedassets4.assets", outDir + "/render/ui_prefabs.json", err);
+             ExportUi(g, ex, "sharedassets4.assets", outDir + "/render/ui_prefabs.json", err) &&
+             // the menus' shared prefabs (the Options pages)
+             ExportUi(g, ex, "sharedassets3.assets", outDir + "/render/ui_options.json", err);
         g.SetScriptTrees({}); // the exporters only need the MonoBehaviours' base fields from here on
         if (!ok) return false;
     }

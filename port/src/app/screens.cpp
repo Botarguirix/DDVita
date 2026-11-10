@@ -413,6 +413,12 @@ void App::DrawPause() {
 }
 
 void App::DrawOptions() {
+    if (DrawOptionsCanvas()) {
+        if (optionsPage_ == 2)
+            return Hints(ui_, {{Input::Right, "-/+"}, {Input::Back, T("General/MenuNav_Back", "Back")}});
+        return Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/MenuNav_Back", "Back")}});
+    }
+    constexpr int kOptionRows = 8;
     ui_.Shade(0.6f);
     const float W = ui_.W(), H = ui_.H();
     float w = 380, h = kOptionRows * 28 + 56, x = std::floor((W - w) * 0.5f), y = std::floor((H - h) * 0.5f);

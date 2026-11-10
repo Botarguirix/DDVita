@@ -98,6 +98,7 @@ add_library(ddgamelib STATIC
     src/app/screens_pause.cpp
     src/app/screens_stageend.cpp
     src/app/screens_newgame.cpp
+    src/app/screens_options.cpp
     src/app/settings.cpp
     src/app/save.cpp
     src/ui/text.cpp

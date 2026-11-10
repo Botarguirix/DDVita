@@ -95,8 +95,10 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     titleUi_.Load(dataDir + "/render/ui_title.json");
     gameUi_.Load(dataDir + "/render/ui_game.json");
     prefabUi_.Load(dataDir + "/render/ui_prefabs.json");
+    optionsUi_.Load(dataDir + "/render/ui_options.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
+    sound_.SetCrowdSetting(settings_.crowd);
     hasSave_ = RecordExists(savePath_);
 }
 
@@ -373,6 +375,7 @@ void App::InputTitle(Input in) {
         break;
     case 4:
         optionsReturn_ = Screen::Title;
+        optionsPage_ = 0;
         Go(Screen::Options);
         break;
     case 5: Go(Screen::Credits); break;
@@ -682,6 +685,7 @@ void App::InputPause(Input in) {
     case 1:
         sound_.PlayCue("MenuSubmit");
         optionsReturn_ = Screen::Pause;
+        optionsPage_ = 0;
         Go(Screen::Options);
         break;
     case 2:
@@ -702,37 +706,54 @@ void App::InputPause(Input in) {
 }
 
 float* App::Volume(int row) {
-    float* v[5] = {&settings_.master, &settings_.music, &settings_.jingles, &settings_.sounds, &settings_.voices};
-    return row >= 0 && row < 5 ? v[row] : nullptr;
+    float* v[6] = {&settings_.master, &settings_.music, &settings_.jingles, &settings_.sounds, &settings_.crowd, &settings_.voices};
+    return row >= 0 && row < 6 ? v[row] : nullptr;
 }
 
 void App::InputOptions(Input in) {
-    if (Nav(in, &sel_, kOptionRows)) sound_.PlayCue("MenuMove");
-    if (in == Input::Menu || IsBack(in)) {
+    if (Nav(in, &sel_, OptionRows())) sound_.PlayCue("MenuMove");
+    if (in == Input::Menu || IsBack(in)) { // mooPreviousPage
         sound_.PlayCue("MenuCancel");
+        if (optionsPage_ != 0) {
+            sel_ = optionsPage_ == 1 ? 0 : 1;
+            optionsPage_ = 0;
+            return;
+        }
         if (!testing) settings_.Save(settingsPath_);
         Screen back = optionsReturn_;
-        Go(back, back == Screen::Pause ? 2 : back == Screen::Title ? 4 : 0);
+        Go(back, back == Screen::Pause ? 1 : back == Screen::Title ? 4 : 0);
         return;
     }
-    if (float* v = Volume(sel_)) {
-        if (in == Input::Left || in == Input::Right) {
+    switch (optionsPage_) {
+    case 0:
+        if (in != Input::Confirm) return;
+        sound_.PlayCue("MenuSubmit");
+        if (sel_ == 2) { // mooDeathballRestoreDefaultSettings
+            settings_ = Settings{};
+            settings_.Apply(mixer_);
+            sound_.SetCrowdSetting(settings_.crowd);
+            if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
+        } else {
+            optionsPage_ = sel_ == 0 ? 1 : 2;
+            sel_ = 0;
+        }
+        return;
+    case 1:
+        if (in != Input::Confirm && in != Input::Left && in != Input::Right) return;
+        if (sel_ == 0) settings_.autoSkipCinematics = !settings_.autoSkipCinematics;
+        else settings_.suggestUndo = !settings_.suggestUndo;
+        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
+        sound_.PlayCue("MenuSubmit");
+        return;
+    default:
+        if (in != Input::Left && in != Input::Right) return;
+        if (float* v = Volume(sel_)) {
             *v = std::clamp(std::round(*v * 10 + (in == Input::Right ? 1 : -1)) / 10, 0.0f, 1.0f);
             settings_.Apply(mixer_);
+            sound_.SetCrowdSetting(settings_.crowd);
             sound_.PlayCue("MenuMove");
         }
-    } else if (sel_ == 5 && (in == Input::Confirm || in == Input::Left || in == Input::Right)) {
-        settings_.suggestUndo = !settings_.suggestUndo;
-        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
-        sound_.PlayCue("MenuSubmit");
-    } else if (sel_ == 6 && (in == Input::Confirm || in == Input::Left || in == Input::Right)) {
-        settings_.autoSkipCinematics = !settings_.autoSkipCinematics;
-        sound_.PlayCue("MenuSubmit");
-    } else if (sel_ == 7 && in == Input::Confirm) { // mooDeathballRestoreDefaultSettings
-        settings_ = Settings{};
-        settings_.Apply(mixer_);
-        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
-        sound_.PlayCue("MenuSubmit");
+        return;
     }
 }
 

@@ -449,7 +449,7 @@ bool ExportUi(const GameFiles& g, const Extracted& ex, const std::string& sceneF
                                             "m_ChildForceExpandHeight", "m_ChildScaleWidth", "m_ChildScaleHeight", "m_ReverseArrangement"})
                         k[key + 2] = v.value(key, 0);
                 }
-            } else if (cls == "Button") { // Selectable: its colour tint and the graphic it tints
+            } else if (cls == "Button" || cls == "Toggle" || cls == "Slider") { // Selectable: its colour tint and the graphic it tints
                 const json& cb = v["m_Colors"];
                 k["transition"] = v.value("m_Transition", 1);
                 k["normal"] = Rgba(cb["m_NormalColor"]);

@@ -37,6 +37,7 @@ public:
     // CrowdAudio: the stadium loop while a run is on screen
     void StartCrowd();
     void StopCrowd(float fadeSeconds);
+    void SetCrowdSetting(float v); // the options' Crowd Volume
     void Update(float dt); // Jukebox.SwapTrackCoroutine
 
     // ---- gameplay ----
@@ -60,7 +61,7 @@ private:
     int stageIndex_ = 0;
     std::string currentTrack_;
     float triumphantPoint_ = 0;
-    float crowdVolume_ = 1;
+    float crowdVolume_ = 1, crowdSetting_ = 1;
     bool crowdOn_ = false;
     std::string swapTo_;
     float swapTimer_ = -1;

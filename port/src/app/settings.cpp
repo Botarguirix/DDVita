@@ -22,6 +22,7 @@ bool Settings::Load(const std::string& path) {
     vol("jingles", &jingles);
     vol("sounds", &sounds);
     vol("voices", &voices);
+    vol("crowd", &crowd);
     auto flag = [&](const char* k, bool* v) {
         if (j.contains(k) && j[k].is_boolean()) *v = j[k].get<bool>();
     };
@@ -31,7 +32,7 @@ bool Settings::Load(const std::string& path) {
 }
 
 bool Settings::Save(const std::string& path) const {
-    json j = {{"master", master}, {"music", music}, {"jingles", jingles}, {"sounds", sounds}, {"voices", voices}, {"suggestUndo", suggestUndo},
+    json j = {{"master", master}, {"music", music}, {"jingles", jingles}, {"sounds", sounds}, {"voices", voices}, {"crowd", crowd}, {"suggestUndo", suggestUndo},
               {"autoSkipCinematics", autoSkipCinematics}};
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
     if (!f) return false;

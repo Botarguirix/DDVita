@@ -33,7 +33,7 @@ namespace dd::app {
 // Options (AppSettingsDeathball)
 // ---------------------------------------------------------------------------------------------
 struct Settings {
-    float master = 0.7f, music = 0.7f, jingles = 0.7f, sounds = 0.7f, voices = 1.0f;
+    float master = 0.7f, music = 0.7f, jingles = 0.7f, sounds = 0.7f, voices = 1.0f, crowd = 1.0f;
     bool suggestUndo = true;
     bool autoSkipCinematics = false; // AppSettingsDeathball.pref_autoSkipCinematics
     bool Load(const std::string& path);
@@ -255,7 +255,9 @@ public:
     void Draw();
 
     static constexpr int kAchievementCols = 12;
-    static constexpr int kOptionRows = 8; // 5 volumes, Suggest Undo, Auto Skip Cinematics, Restore Defaults
+    int optionsPage_ = 0; // 0 main, 1 gameplay, 2 sound
+    int OptionRows() const;
+    bool DrawOptionsCanvas();
     void StartIntro(bool force = false); // the boot cutscene, unless cinematics are skipped
     static constexpr int kMusicPopup = 100;
     static constexpr float kToastTime = 3.0f;
@@ -270,7 +272,7 @@ private:
     ui::Loc loc_;
     Help help_;
     // the original's menus (render/ui_title.json, ui_game.json: the scenes' Canvas trees)
-    ui::Canvas titleUi_, gameUi_, prefabUi_; // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
+    ui::Canvas titleUi_, gameUi_, prefabUi_, optionsUi_; // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
     int hudMark_ = -1;                        // gameUi_'s own nodes; the HUD's instances follow
     std::vector<uint32_t> phaseColors_;
     bool DrawHudCanvas();

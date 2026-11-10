@@ -130,7 +130,7 @@ bool Canvas::Load(const std::string& path) {
             } else if (t == "Mask" && on) {
                 c.mask = true;
                 c.showMaskGraphic = I(k, "show", 1) != 0;
-            } else if (t == "Button" && I(k, "transition") == 1 && k.contains("target")) {
+            } else if ((t == "Button" || t == "Toggle" || t == "Slider") && I(k, "transition") == 1 && k.contains("target")) {
                 c.tintNormal = Color(k.value("normal", json()));
                 c.tintSelected = Color(k.value("selected", json()));
                 tints.emplace_back(static_cast<int>(nodes_.size()), k["target"].get<int64_t>());

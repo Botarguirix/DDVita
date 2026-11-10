@@ -177,7 +177,12 @@ void Sound::StartCrowd() {
     if (!mixer_ || it == named_.end() || crowdOn_) return;
     crowdOn_ = true;
     mixer_->PlayStream(Mixer::Crowd, ClipPath(it->second), true, 0, 1.0f);
-    mixer_->FadeStream(Mixer::Crowd, crowdVolume_, 1.0f, false);
+    mixer_->FadeStream(Mixer::Crowd, crowdVolume_ * crowdSetting_, 1.0f, false);
+}
+
+void Sound::SetCrowdSetting(float v) {
+    crowdSetting_ = v;
+    if (mixer_ && crowdOn_) mixer_->FadeStream(Mixer::Crowd, crowdVolume_ * crowdSetting_, 0.1f, false);
 }
 
 void Sound::StopCrowd(float fadeSeconds) {
