@@ -170,7 +170,7 @@ int RunGame(int argc, char** argv) {
             run = std::make_unique<Run>(data, GenerateSession(data, req), req.team, req.mode);
         }
     }
-    std::printf("seed %d mode %d stage %zu%s\n", rec.seed, static_cast<int>(rec.mode), rec.stages.size() + 1, resumed ? " (continued)" : "");
+    std::printf("seed %d mode %d stage %d%s\n", rec.seed, static_cast<int>(rec.mode), static_cast<int>(rec.stages.size()) + 1, resumed ? " (continued)" : "");
     std::fflush(stdout);
     if (shotPath.empty() && !SaveRecord(savePath, rec)) std::fprintf(stderr, "cannot write %s\n", savePath.c_str());
 
