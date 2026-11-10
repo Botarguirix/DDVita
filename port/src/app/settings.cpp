@@ -22,8 +22,11 @@ bool Settings::Load(const std::string& path) {
     vol("jingles", &jingles);
     vol("sounds", &sounds);
     vol("voices", &voices);
-    suggestUndo = j.value("suggestUndo", suggestUndo);
-    autoSkipCinematics = j.value("autoSkipCinematics", autoSkipCinematics);
+    auto flag = [&](const char* k, bool* v) {
+        if (j.contains(k) && j[k].is_boolean()) *v = j[k].get<bool>();
+    };
+    flag("suggestUndo", &suggestUndo);
+    flag("autoSkipCinematics", &autoSkipCinematics);
     return true;
 }
 

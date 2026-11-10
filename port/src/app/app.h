@@ -7,7 +7,10 @@
 //   settings.cpp      options (settings.json)
 //   help.cpp          How to Play pages and the in-game info popups (help.json)
 #pragma once
+#include <algorithm>
 #include <deque>
+
+#include <nlohmann/json.hpp>
 #include <memory>
 #include <string>
 #include <vector>
@@ -117,6 +120,18 @@ public:
     bool LoadDefs(const std::string& achievementsJson);
     bool Load(const std::string& path);
     bool Save(const std::string& path);
+    Meta& operator=(const Meta& o) {
+        // only the progress (data_ stays: a reference)
+        std::copy(o.unlocked, o.unlocked + static_cast<int>(Achievement::Count), unlocked);
+        std::copy(o.stats, o.stats + static_cast<int>(Stat::Count), stats);
+        teams = o.teams;
+        keys = o.keys, unreportedKeys = o.unreportedKeys, lastDailyChallengeSeed = o.lastDailyChallengeSeed, highScoreDaily = o.highScoreDaily;
+        std::copy(o.completedMode, o.completedMode + 4, completedMode);
+        completedHalloween = o.completedHalloween;
+        std::copy(o.seenModeUnlock, o.seenModeUnlock + 4, seenModeUnlock);
+        std::copy(o.seenMusicPack, o.seenMusicPack + 4, seenMusicPack);
+        return *this;
+    }
 
     std::vector<AchievementDef> defs; // AchievementManagerDeathball.achievements order
     std::string lockedIcon;
@@ -187,6 +202,7 @@ private:
     void NewStage(const sim::Game& g);
     void StageWon(const sim::Game& g);
     void GameComplete(const sim::Game& g);
+    bool LoadJson(const nlohmann::json& j);
 };
 
 // ---------------------------------------------------------------------------------------------

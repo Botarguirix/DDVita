@@ -20,6 +20,7 @@ using namespace dd::sim;
 
 namespace {
 constexpr int kVersion = 1;
+constexpr int kLayout = 2; // this port's meta.json layout (the lost milestone 6 build wrote another)
 constexpr int kStages = 12; // LeagueManager.totalNumberOfStages
 
 const Enemy* AsEnemy(const Game& g, int uid) {
@@ -44,7 +45,8 @@ bool Meta::LoadDefs(const std::string& path) {
     json j = json::parse(f, nullptr, false);
     if (!j.is_object()) return false;
     auto str = [](const json& o, const char* k) { return o.contains(k) && o[k].is_string() ? o[k].get<std::string>() : std::string(); };
-    for (const json& a : j.value("achievements", json::array())) {
+    const json list = j.contains("achievements") && j["achievements"].is_array() ? j["achievements"] : json::array();
+    for (const json& a : list) {
         AchievementDef d;
         d.id = static_cast<Achievement>(a.value("id", 0));
         d.name = str(a, "name");
@@ -66,12 +68,34 @@ bool Meta::Load(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) return false;
     json j = json::parse(f, nullptr, false);
-    if (!j.is_object() || j.value("version", 0) != kVersion) return false;
-    for (const json& a : j.value("achievements", json::array()))
+    f.close();
+    // a file this version cannot read (another layout, e.g. from an earlier build of the port) is
+    // kept as meta_old.json instead of being overwritten by the next save
+    auto unreadable = [&]() {
+        std::string old = path.substr(0, path.find_last_of("/\\") + 1) + "meta_old.json";
+        std::remove(old.c_str());
+        std::rename(path.c_str(), old.c_str());
+        std::fprintf(stderr, "meta: %s has an unknown layout; kept as %s\n", path.c_str(), old.c_str());
+        return false;
+    };
+    auto num = [&](const char* k) { return j.is_object() && j.contains(k) && j[k].is_number_integer() ? j[k].get<int>() : 0; };
+    if (num("version") != kVersion || num("layout") != kLayout) return unreadable();
+    try {
+        return LoadJson(j);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "meta: %s\n", e.what());
+        *this = Meta(data_);
+        return unreadable();
+    }
+}
+
+bool Meta::LoadJson(const json& j) {
+    auto arr = [&](const char* k) { return j.contains(k) && j[k].is_array() ? j[k] : json::array(); };
+    for (const json& a : arr("achievements"))
         if (a.is_number_integer() && a.get<int>() > 0 && a.get<int>() < static_cast<int>(Achievement::Count)) unlocked[a.get<int>()] = true;
-    const json st = j.value("stats", json::array());
+    const json st = arr("stats");
     for (size_t i = 0; i < st.size() && i < static_cast<size_t>(Stat::Count); i++) stats[i] = st[i].get<long long>();
-    const json tm = j.value("teams", json::array());
+    const json tm = arr("teams");
     for (size_t i = 0; i < tm.size() && i < teams.size(); i++) {
         TeamProgress& t = teams[i];
         t.unlocked = i == 0 || tm[i].value("unlocked", false);
@@ -83,12 +107,12 @@ bool Meta::Load(const std::string& path) {
     keys = j.value("keys", 0);
     lastDailyChallengeSeed = j.value("lastDailyChallengeSeed", 0);
     highScoreDaily = j.value("highScoreDaily", 0);
-    const json cm = j.value("completedMode", json::array());
+    const json cm = arr("completedMode");
     for (size_t i = 0; i < cm.size() && i < 4; i++) completedMode[i] = cm[i];
     completedHalloween = j.value("completedHalloween", false);
-    const json sm = j.value("seenModeUnlock", json::array());
+    const json sm = arr("seenModeUnlock");
     for (size_t i = 0; i < sm.size() && i < 4; i++) seenModeUnlock[i] = sm[i];
-    const json sp = j.value("seenMusicPack", json::array());
+    const json sp = arr("seenMusicPack");
     for (size_t i = 0; i < sp.size() && i < 4; i++) seenMusicPack[i] = sp[i];
     dirty = false;
     return true;
@@ -97,6 +121,7 @@ bool Meta::Load(const std::string& path) {
 bool Meta::Save(const std::string& path) {
     json j;
     j["version"] = kVersion;
+    j["layout"] = kLayout;
     json a = json::array();
     for (int i = 1; i < static_cast<int>(Achievement::Count); i++)
         if (unlocked[i]) a.push_back(i);
