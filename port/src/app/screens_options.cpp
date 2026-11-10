@@ -17,7 +17,7 @@ void Outline(ui::Canvas& c, int row, bool on) {
 
 // rows of the options page showing: 0 main (Gameplay, Sound, Restore Defaults), 1 gameplay
 // (Auto Skip Cinematics, Undo Suggestions), 2 sound (six volumes)
-int App::OptionRows() const { return optionsPage_ == 0 ? 3 : optionsPage_ == 1 ? 2 : 6; }
+int App::OptionRows() const { return optionsPage_ == 0 ? 3 : optionsPage_ == 1 ? 3 : 6; }
 
 bool App::DrawOptionsCanvas() {
     ui::Canvas& c = optionsUi_;
@@ -42,15 +42,16 @@ bool App::DrawOptionsCanvas() {
             const char* fb;
             bool* value;
         };
-        Row shown[2] = {{"SettingToggle (AutoSkipCinematics)", "General/Setting_AutoSkipCinematics", "Auto Skip Cinematics", &settings_.autoSkipCinematics},
-                        {"SettingToggle (SuggestUndo)", "General/Setting_SuggestUndo", "Undo Suggestions", &settings_.suggestUndo}};
+        Row shown[3] = {{"SettingToggle (AutoSkipCinematics)", "General/Setting_AutoSkipCinematics", "Auto Skip Cinematics", &settings_.autoSkipCinematics},
+                        {"SettingToggle (SuggestUndo)", "General/Setting_SuggestUndo", "Undo Suggestions", &settings_.suggestUndo},
+                        {"SettingToggle (EnemyPopups)", "", "Health Bars", &settings_.healthBars}};
         for (int k : c.node(list).kids) {
             const std::string& n = c.node(k).name;
             bool keep = n == "OptionsSubHeader (1)"; // "General"
-            for (int r = 0; r < 2; r++)
+            for (int r = 0; r < 3; r++)
                 if (n == shown[r].node) {
                     keep = true;
-                    c.SetText(c.Find("Text_M", k), T(shown[r].key, shown[r].fb));
+                    c.SetText(c.Find("Text_M", k), *shown[r].key ? T(shown[r].key, shown[r].fb) : std::string(shown[r].fb));
                     c.SetSprite(c.Find("Toggle/Background/Icon", k), *shown[r].value ? "Icons_Toggle_On" : "Icons_Toggle_Off");
                     Outline(c, k, sel_ == r);
                 }

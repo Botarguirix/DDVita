@@ -762,6 +762,22 @@ void StageView::DrawEffects() {
     r_.Draw(Texture{}, batch_.data(), static_cast<int>(batch_.size()), Blend::Alpha, false);
 }
 
+std::vector<StageView::BarInfo> StageView::Bars() const {
+    std::vector<BarInfo> out;
+    for (const auto& ent : game_.entities) {
+        Entity* e = ent.get();
+        if (!(e->isEnemy() || e->isPlayer() || e->isObstacle())) continue;
+        Actor* a = static_cast<Actor*>(e);
+        auto it = vis_.find(e->uid);
+        if (it == vis_.end() || !it->second.shown || it->second.dying || !a->isAlive) continue;
+        float sx, sy;
+        if (!Project(it->second.Pos() + Vec3{0, 1.2f, 0}, &sx, &sy)) continue;
+        Enemy* en = e->isEnemy() ? static_cast<Enemy*>(e) : nullptr;
+        out.push_back({sx, sy, a->health, a->maxHealth(), en ? en->actOrder : -1, en && en->stunned()});
+    }
+    return out;
+}
+
 void StageView::DrawOverlay() {
     const Font& f = a_.font();
     for (const auto& ent : game_.entities) {

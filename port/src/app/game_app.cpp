@@ -759,7 +759,8 @@ void App::InputOptions(Input in) {
     case 1:
         if (in != Input::Confirm && in != Input::Left && in != Input::Right) return;
         if (sel_ == 0) settings_.autoSkipCinematics = !settings_.autoSkipCinematics;
-        else settings_.suggestUndo = !settings_.suggestUndo;
+        else if (sel_ == 1) settings_.suggestUndo = !settings_.suggestUndo;
+        else settings_.healthBars = !settings_.healthBars;
         if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
         sound_.PlayCue("MenuSubmit");
         return;

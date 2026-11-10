@@ -122,4 +122,41 @@ bool App::DrawHudCanvas() {
     return true;
 }
 
+// HealthBar_WithActOrder (the original shows it over the actor the cursor is on): over every actor,
+// with the act order under the enemies'
+bool App::DrawHealthBars() {
+    ui::Canvas& c = gameUi_;
+    int root = c.Find("Canvas_Gameplay"), prefab = prefabUi_.loaded() ? prefabUi_.Find("HealthBar_WithActOrder") : -1;
+    if (root < 0 || prefab < 0 || !st_.view) return false;
+    ui_.Begin();
+    std::vector<int> kids = c.node(root).kids;
+    std::vector<bool> was;
+    for (int k : kids) was.push_back(c.node(k).active), c.SetActive(k, false);
+    int base = c.Mark();
+    c.Layout(ui_, root, loc_);
+    ui::CRect sr = c.ScreenRect(ui_, root);
+    float k = sr.w > 0 ? c.node(root).rect.w / (sr.w * ui_.scale()) : 1;
+    float cx = r_.outW() * 0.5f, cy = r_.outH() * 0.5f;
+    for (const auto& b : st_.view->Bars()) {
+        int n = c.Instantiate(prefabUi_, prefab, root);
+        ui::CNode& nd = c.node(n);
+        nd.amin[0] = nd.amin[1] = nd.amax[0] = nd.amax[1] = 0.5f;
+        nd.pos[0] = (b.x - cx) * k;
+        nd.pos[1] = (cy - b.y) * k;
+        int hg = c.Find("HealthBar_HideGroup", n);
+        c.SetActive(hg, true);
+        float f = b.maxHealth > 0 ? std::clamp(static_cast<float>(b.health) / b.maxHealth, 0.0f, 1.0f) : 0.0f;
+        c.SetFill(c.Find("HealthBar_Fill", hg), f);
+        c.SetFill(c.Find("HealthBar_Difference", hg), f);
+        c.SetText(c.Find("Numbers_BG/Text_M", hg), std::to_string(b.health));
+        int ao = c.Find("ActOrder_HideGroup - DELETE ME", n);
+        c.SetActive(ao, b.actOrder >= 0);
+        if (b.actOrder >= 0) c.SetText(c.Find("Text_M", ao), std::to_string(b.actOrder) + (b.stunned ? " z" : ""));
+    }
+    c.Draw(ui_, root, loc_);
+    c.Truncate(base);
+    for (size_t i = 0; i < kids.size(); i++) c.SetActive(kids[i], was[i]);
+    return true;
+}
+
 } // namespace dd::app

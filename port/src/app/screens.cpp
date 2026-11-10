@@ -222,7 +222,7 @@ void App::DrawStage() {
     bool showCursor = screen_ == Screen::Play && idle && g.phase() == Phase::PlayerInput;
     st_.view->Draw(showCursor ? &st_.cursor : nullptr, st_.commands);
     r_.EndScene();
-    st_.view->DrawOverlay();
+    if (settings_.healthBars && !DrawHealthBars()) st_.view->DrawOverlay();
 }
 
 void App::DrawHud() {

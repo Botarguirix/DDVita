@@ -35,7 +35,8 @@ namespace dd::app {
 struct Settings {
     float master = 0.7f, music = 0.7f, jingles = 0.7f, sounds = 0.7f, voices = 1.0f, crowd = 1.0f;
     bool suggestUndo = true;
-    bool autoSkipCinematics = false; // AppSettingsDeathball.pref_autoSkipCinematics
+    bool autoSkipCinematics = false;
+    bool healthBars = true; // the port's: a HealthBar_WithActOrder over every actor // AppSettingsDeathball.pref_autoSkipCinematics
     bool Load(const std::string& path);
     bool Save(const std::string& path) const;
     void Apply(audio::Mixer& mixer) const;
@@ -318,6 +319,7 @@ private:
     bool DrawDefeatCanvas();
     bool DrawSkullKeysCanvas();
     bool DrawTrialCompleteCanvas();
+    bool DrawHealthBars();
     void BuildTimeline(ui::Canvas& c, int root, int dataRoot);
     int GameplayMenuPage(const char* page);
     void DrawGameplayMenu();

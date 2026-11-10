@@ -36,6 +36,13 @@ public:
     void Draw(const sim::V2* cursor, const std::vector<sim::Command>& commands);
     // 2D pass in output pixels (after Renderer::EndScene): health numbers over the actors.
     void DrawOverlay();
+    // where the health bars go (output pixels, over each living actor's head)
+    struct BarInfo {
+        float x, y;
+        int health, maxHealth, actOrder; // actOrder < 0: not an enemy
+        bool stunned;
+    };
+    std::vector<BarInfo> Bars() const;
     // Screen position (output pixels) of a world point; false when behind the camera.
     bool Project(Vec3 p, float* sx, float* sy) const;
     Vec3 ActorPosition(int uid) const;
