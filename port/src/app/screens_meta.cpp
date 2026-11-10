@@ -129,6 +129,7 @@ void App::DrawSkullKeys() {
 // the title's popups: a mode unlocked, or new music
 void App::DrawUnlocks() {
     if (unlockPopups_.empty()) return;
+    if (titleUi_.loaded() && DrawUnlockCanvas()) return;
     ui_.Shade(0.6f);
     int u = unlockPopups_.front();
     std::string hdr, body;

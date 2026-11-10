@@ -31,6 +31,7 @@ struct CNode {
     int imageType = 0; // Simple, Sliced, Tiled, Filled
     int fillMethod = 0, fillOrigin = 0;
     float fillAmount = 1, ppum = 1;
+    float rotation = 0; // z rotation in degrees (simple images only)
     bool fillCenter = true, preserveAspect = false, fillClockwise = true;
 
     // ---- Text ----

@@ -210,7 +210,7 @@ private:
 // The app
 // ---------------------------------------------------------------------------------------------
 enum class Screen {
-    Title, Modes, Teams, StageStart, Play, Pause, PauseConfirm, Options, Defeat, Flash, Results, Manage, ManageConfirm,
+    Title, Modes, NewGame, Teams, StageStart, Play, Pause, PauseConfirm, Options, Defeat, Flash, Results, Manage, ManageConfirm,
     KeepGoing, Overwrite, Ending, HowToPlay, Achievements, SkullKeys, Unlocks,
     Intro,     // the Judgment's speech before the title (CutsceneController, "Intro" scene)
     TrialIntro, // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
@@ -290,6 +290,7 @@ private:
     std::unique_ptr<sim::Run> run_;
     StageScreen st_;
     GameMode newMode_ = GameMode::Normal;
+    int newTeam_ = 0; // Teams.currentTeam for the next run
     Screen optionsReturn_ = Screen::Title, helpReturn_ = Screen::Title;
     bool defeat_ = false;
     int stageGold_ = 0, revealed_ = 0;
@@ -300,6 +301,12 @@ private:
     bool DrawOverwriteCanvas();
     bool DrawPauseCanvas();
     bool DrawPauseConfirmCanvas();
+    int TitlePage(const char* page);
+    bool DrawModesCanvas();
+    bool DrawNewGameCanvas();
+    bool DrawTeamsCanvas();
+    bool DrawUnlockCanvas();
+    void InputNewGame(Input in);
     void DrawBlackFade();
     bool DrawFlashCanvas();
     bool DrawDefeatCanvas();

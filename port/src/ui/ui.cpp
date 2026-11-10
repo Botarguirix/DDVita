@@ -102,6 +102,22 @@ void Ui::Radial(const gfx::Texture& tex, float x, float y, float w, float h, flo
     r_.Tris(tex, v.data(), static_cast<int>(v.size() / 4), color);
 }
 
+void Ui::RotatedQuad(const gfx::Texture& tex, float cx, float cy, const float corners[4][2], const float uv[4][2], float cs, float sn, uint32_t color) {
+    float p[4][4];
+    for (int i = 0; i < 4; i++) {
+        float x = corners[i][0] * cs - corners[i][1] * sn, y = corners[i][0] * sn + corners[i][1] * cs;
+        p[i][0] = ox_ + (cx + x) * s_;
+        p[i][1] = oy_ + (cy + y) * s_;
+        p[i][2] = uv[i][0];
+        p[i][3] = uv[i][1];
+    }
+    float v[6 * 4];
+    const int order[6] = {0, 1, 2, 0, 2, 3};
+    for (int i = 0; i < 6; i++)
+        for (int k = 0; k < 4; k++) v[i * 4 + k] = p[order[i]][k];
+    r_.Tris(tex, v, 6, color);
+}
+
 void Ui::Clip(float x, float y, float w, float h) {
     if (w <= 0 || h <= 0) r_.Clip(0, 0, 0, 0);
     else r_.Clip(std::floor(ox_ + x * s_), std::floor(oy_ + y * s_), std::ceil(w * s_), std::ceil(h * s_));

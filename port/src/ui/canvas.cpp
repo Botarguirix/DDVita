@@ -561,6 +561,14 @@ void Canvas::DrawImage(const CNode& n, float alpha) {
             qy = y + (h - qh) * (1 - n.piv[1]);
         }
         float u0 = d->x, u1 = d->x + d->w, v0 = d->y, v1 = d->y + d->h;
+        if (n.rotation != 0) { // about the rect's centre (y down on screen: counter-clockwise is negative)
+            float a = -n.rotation * 3.14159265f / 180.0f, cs = std::cos(a), sn = std::sin(a);
+            float cx = qx + dx + qw * 0.5f, cy = qy + dy + qh * 0.5f;
+            float corners[4][2] = {{-qw * 0.5f, -qh * 0.5f}, {qw * 0.5f, -qh * 0.5f}, {qw * 0.5f, qh * 0.5f}, {-qw * 0.5f, qh * 0.5f}};
+            float uv[4][2] = {{u0 / tw, v1 / th}, {u1 / tw, v1 / th}, {u1 / tw, v0 / th}, {u0 / tw, v0 / th}};
+            ui_->RotatedQuad(tex, cx, cy, corners, uv, cs, sn, color);
+            return;
+        }
         if (n.imageType == 3 && n.fillMethod == 4 && n.fillAmount < 1) { // Filled, Radial360
             ui_->Radial(tex, qx + dx, qy + dy, qw, qh, u0 / tw, v1 / th, u1 / tw, v0 / th, color, n.fillAmount, n.fillOrigin, n.fillClockwise);
             return;

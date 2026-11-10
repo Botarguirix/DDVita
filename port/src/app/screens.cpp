@@ -137,7 +137,7 @@ void App::DrawConfirm(const std::string& header, const std::string& body, const 
 // Frame
 // ---------------------------------------------------------------------------------------------
 void App::Draw() {
-    bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams &&
+    bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams && screen_ != Screen::NewGame &&
                        screen_ != Screen::Achievements && screen_ != Screen::Unlocks && screen_ != Screen::Intro &&
                        screen_ != Screen::TrialIntro && screen_ != Screen::Credits &&
                        !(screen_ == Screen::HowToPlay && helpReturn_ == Screen::Title) &&
@@ -153,6 +153,12 @@ void App::Draw() {
     case Screen::Title: DrawTitle(); break;
     case Screen::Modes: DrawModes(); break;
     case Screen::Teams: DrawTeams(); break;
+    case Screen::NewGame:
+        if (titleUi_.loaded() && DrawNewGameCanvas())
+            Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/MenuNav_Back", "Back")}});
+        else
+            DrawModes();
+        break;
     case Screen::StageStart: DrawHud(); DrawStageStart(); break;
     case Screen::Play: DrawHud(); break;
     case Screen::Pause: DrawHud(); DrawPause(); break;
@@ -187,7 +193,10 @@ void App::Draw() {
     case Screen::HowToPlay: DrawHowToPlay(); break;
     case Screen::Achievements: DrawAchievements(); break;
     case Screen::SkullKeys: DrawSkullKeys(); break;
-    case Screen::Unlocks: DrawTitle(); DrawUnlocks(); break;
+    case Screen::Unlocks:
+        if (!titleUi_.loaded()) DrawTitle();
+        DrawUnlocks();
+        break;
     case Screen::Intro: DrawIntro(); break;
     case Screen::TrialIntro: DrawTrialIntro(); break;
     case Screen::Credits:
@@ -682,12 +691,7 @@ bool App::DrawTitleCanvas(const char* page) {
     ui::Canvas& c = titleUi_;
     int root = c.Find("Canvas_TitleScreen");
     if (root < 0) return false;
-    int pages = c.Find("MenuPages", root);
-    for (int k : c.node(pages).kids) c.SetActive(k, c.node(k).name == page);
-    // what the original removes on this platform (web links, Steam leaderboards, Quit on consoles)
-    for (int i = 0; i < c.size(); i++)
-        for (const std::string& s : c.node(i).scripts)
-            if (s == "ExpireByPlatform" && !(platform::CanQuit() && c.node(i).name == "Quit")) c.SetActive(i, false);
+    TitlePage(page); // also removes what the original hides on this platform (web links, leaderboards)
     c.SetActive(c.Find("MenuPages/MenuPage_MainMenu/WebLinks", root), false);
     // EggTools.Credits: the text scrolls up at autoScrollSpeed (25) and starts over past maxY
     if (int content = c.Find("MenuPages/MenuPage_Credits/PageArea/Credits/Content", root); content >= 0) {
@@ -768,6 +772,8 @@ void App::DrawTitle() {
 }
 
 void App::DrawModes() {
+    if (screen_ == Screen::Modes && titleUi_.loaded() && DrawModesCanvas())
+        return Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/MenuNav_Back", "Back")}});
     const float W = ui_.W(), H = ui_.H();
     ui_.Text(ui::Large, W * 0.5f, 14, col::White, T("FrontEnd/SelectMode", "Select Mode"), Align::Center);
     static const GameMode modes[4] = {GameMode::Normal, GameMode::DailyChallenge, GameMode::Boss, GameMode::Action};
@@ -817,6 +823,11 @@ void App::DrawModes() {
 }
 
 void App::DrawTeams() {
+    if (titleUi_.loaded() && DrawTeamsCanvas()) {
+        bool un = meta_.teams[static_cast<size_t>(sel_)].unlocked;
+        return Hints(ui_, {{Input::Confirm, un ? T("FrontEnd/Teams_SelectTeam", "Select Team") : T("FrontEnd/Teams_UnlockTeam", "Unlock Team")},
+                           {Input::Back, T("General/MenuNav_Back", "Back")}});
+    }
     const float W = ui_.W(), H = ui_.H();
     ui_.Text(ui::Large, W * 0.5f, 10, col::White, T("FrontEnd/Teams_SelectTeam", "Select Team"), Align::Center);
     // keys owned

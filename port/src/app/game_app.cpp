@@ -465,19 +465,39 @@ void App::InputModes(Input in) {
     }
     sound_.PlayCue("MenuSubmit");
     newMode_ = modes[sel_];
-    int seed = static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff);
+    if (!meta_.teams.empty()) newTeam_ = std::clamp(meta_.teamIndex, 0, static_cast<int>(meta_.teams.size()) - 1);
+    Go(Screen::NewGame);
+}
+
+// MenuPage_NewGame: Begin (0) and Change Team (1)
+void App::InputNewGame(Input in) {
+    if (IsBack(in)) {
+        sound_.PlayCue("MenuCancel");
+        Go(Screen::Modes, newMode_ == GameMode::Normal ? 0 : newMode_ == GameMode::DailyChallenge ? 1 : newMode_ == GameMode::Boss ? 2 : 3);
+        return;
+    }
+    const GameModeConfig* m = data_.GetGameModeConfig(newMode_);
     // the Teams button stays locked until the first Skull Key (LockCondition.NotEarnedEnoughKeysForFirstTeam)
-    if ((m && !m->allowTeamSelection) || meta_.TeamSelectionLocked()) NewRun(newMode_, 0, seed);
-    else Go(Screen::Teams);
+    bool teams = newMode_ != GameMode::DailyChallenge && !((m && !m->allowTeamSelection) || meta_.TeamSelectionLocked());
+    if (newMode_ != GameMode::DailyChallenge && Nav(in, &sel_, 2)) sound_.PlayCue("MenuMove");
+    if (in != Input::Confirm) return;
+    if (sel_ == 1) {
+        if (!teams) return sound_.PlayCue("MenuInvalid");
+        sound_.PlayCue("MenuSubmit");
+        Go(Screen::Teams, newTeam_);
+        return;
+    }
+    sound_.PlayCue("MenuSubmit");
+    int team = teams ? newTeam_ : 0;
+    NewRun(newMode_, team, static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff));
 }
 
 void App::InputTeams(Input in) {
     int n = static_cast<int>(data_.teams.size());
     if (Nav(in, &sel_, n)) sound_.PlayCue("MenuMove");
-    if (IsBack(in)) {
+    if (IsBack(in)) { // mooPreviousPage
         sound_.PlayCue("MenuCancel");
-        int m = newMode_ == GameMode::Normal ? 0 : newMode_ == GameMode::DailyChallenge ? 1 : newMode_ == GameMode::Boss ? 2 : 3;
-        Go(Screen::Modes, m);
+        Go(Screen::NewGame, 1);
         return;
     }
     if (in != Input::Confirm) return;
@@ -490,8 +510,11 @@ void App::InputTeams(Input in) {
         }
         return;
     }
+    // mooDeathballTeam: the team becomes the current one and the new game page shows it
     sound_.PlayCue("MenuSubmit");
-    NewRun(newMode_, sel_, static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff));
+    newTeam_ = sel_;
+    meta_.teamIndex = sel_;
+    Go(Screen::NewGame, 0);
 }
 
 // StageStartPanel: swap ball (Easy / Normal / Hard), then Play Deathball
@@ -829,6 +852,7 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
         break;
     case Screen::Title:
     case Screen::Modes:
+    case Screen::NewGame:
     case Screen::Teams:
     case Screen::StageStart:
     case Screen::Defeat:
@@ -881,6 +905,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
         break;
     case Screen::Teams:
         for (Input in : inputs) InputTeams(in);
+        break;
+    case Screen::NewGame:
+        for (Input in : inputs)
+            if (screen_ == Screen::NewGame) InputNewGame(in);
         break;
     case Screen::StageStart:
         for (Input in : inputs)
@@ -1033,9 +1061,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 break;
             }
         break;
-    case Screen::Unlocks: // the title's unlock popups, one at a time
-        for (Input in : inputs)
-            if ((in == Input::Confirm || IsBack(in)) && timer_ > 0.5f && !unlockPopups_.empty()) {
+    case Screen::Unlocks: { // the title's unlock popups, one at a time
+        bool hide = timer_ >= 5.0f; // UnlockPopup.displayTime
+        for (Input in : inputs) hide = hide || ((in == Input::Confirm || IsBack(in)) && timer_ > 1.0f);
+        if (hide && !unlockPopups_.empty()) {
                 sound_.PlayCue("MenuSubmit");
                 int u = unlockPopups_.front();
                 if (u == kMusicPopup) {
@@ -1051,9 +1080,9 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 } else {
                     timer_ = 0;
                 }
-                break;
-            }
+        }
         break;
+    }
     case Screen::Credits:
         for (Input in : inputs)
             if (in == Input::Menu || IsBack(in) || in == Input::Confirm) {

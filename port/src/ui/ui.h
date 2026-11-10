@@ -75,6 +75,8 @@ public:
     // `origin` (0 bottom, 1 right, 2 top, 3 left) through amount * 360 degrees
     void Radial(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color,
                 float amount, int origin, bool clockwise);
+    // A quad turned about (cx, cy): corners relative to the centre, rotated by (cos, sin)
+    void RotatedQuad(const gfx::Texture& tex, float cx, float cy, const float corners[4][2], const float uv[4][2], float cs, float sn, uint32_t color);
     // Clip drawing to a virtual rectangle (w <= 0: off)
     void Clip(float x, float y, float w, float h);
     // The menu font for a font asset of the game (SinsGold, CompassGold, EffortsPro...)
