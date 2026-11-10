@@ -344,6 +344,11 @@ void App::EndRun() {
         sound_.PlayNamedMusic("music.endingVictory", 1.0f, 3.0f);
     }
     meta_.RunEnded(*run_, rec_.team);
+    {
+        Date d = Today(); // DateTime.ToShortDateString (en-US)
+        std::string date = std::to_string(d.month) + "/" + std::to_string(d.day) + "/" + std::to_string(d.year);
+        for (const HumanPlayer* p : run_->activePlayers) meta_.AddHallOfFameEntry(p->playerName, date);
+    }
     SaveMeta();
     std::printf("run over: final score %d\n", run_->GetFinalScoreTotal());
     std::fflush(stdout);
@@ -384,18 +389,27 @@ void App::InputTitle(Input in) {
 
 // Stats & Achievements: the d-pad moves through the achievement grid, Switch flips to the stats
 void App::InputAchievements(Input in) {
-    if (in == Input::Menu || IsBack(in)) {
+    if (in == Input::Menu || IsBack(in)) { // mooChangeMenuPage / mooPreviousPage
         sound_.PlayCue("MenuCancel");
-        Go(Screen::Title, 3);
+        if (metaTab_ != 0) {
+            sel_ = metaTab_ - 1;
+            metaTab_ = 0;
+        } else {
+            Go(Screen::Title, 3);
+        }
         return;
     }
-    if (in == Input::Switch || (metaTab_ == 1 && in == Input::Confirm)) {
-        metaTab_ ^= 1;
-        sound_.PlayCue("MenuMove");
+    if (metaTab_ == 0) { // Stats, Achievements, Hall of Fame
+        if (Nav(in, &sel_, 3)) sound_.PlayCue("MenuMove");
+        if (in == Input::Confirm) {
+            sound_.PlayCue("MenuSubmit");
+            metaTab_ = sel_ + 1;
+            sel_ = 0;
+        }
         return;
     }
     int n = static_cast<int>(meta_.defs.size());
-    if (metaTab_ != 0 || n == 0) return;
+    if (metaTab_ != 2 || n == 0) return;
     int s = sel_;
     switch (in) {
     case Input::Left: s = s % kAchievementCols == 0 ? std::min(s + kAchievementCols - 1, n - 1) : s - 1; break;

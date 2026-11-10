@@ -114,6 +114,9 @@ bool Meta::LoadJson(const json& j) {
     for (size_t i = 0; i < sm.size() && i < 4; i++) seenModeUnlock[i] = sm[i];
     const json sp = arr("seenMusicPack");
     for (size_t i = 0; i < sp.size() && i < 4; i++) seenMusicPack[i] = sp[i];
+    hallOfFame.clear();
+    for (const json& e : arr("hallOfFame"))
+        if (e.is_array() && e.size() == 2 && e[0].is_string() && e[1].is_string()) hallOfFame.emplace_back(e[0].get<std::string>(), e[1].get<std::string>());
     dirty = false;
     return true;
 }
@@ -134,6 +137,9 @@ bool Meta::Save(const std::string& path) {
                       {"keysAcquired", t.keysAcquired},
                       {"best", {t.best[0], t.best[1], t.best[2], t.best[3]}}});
     j["teams"] = std::move(tm);
+    json hof = json::array();
+    for (const auto& [name, date] : hallOfFame) hof.push_back({name, date});
+    j["hallOfFame"] = std::move(hof);
     j["keys"] = keys;
     j["lastDailyChallengeSeed"] = lastDailyChallengeSeed;
     j["highScoreDaily"] = highScoreDaily;
@@ -289,6 +295,12 @@ int Meta::TeamsCompleted() const {
     int n = 0;
     for (const TeamProgress& t : teams) n += t.stagesCompleted >= kStages;
     return n;
+}
+
+void Meta::AddHallOfFameEntry(const std::string& name, const std::string& date) {
+    hallOfFame.emplace_back(name, date);
+    if (hallOfFame.size() > 70) hallOfFame.erase(hallOfFame.begin());
+    dirty = true;
 }
 
 int Meta::BestScore(int team, GameMode mode) const {

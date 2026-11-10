@@ -131,6 +131,7 @@ public:
         completedHalloween = o.completedHalloween;
         std::copy(o.seenModeUnlock, o.seenModeUnlock + 4, seenModeUnlock);
         std::copy(o.seenMusicPack, o.seenMusicPack + 4, seenMusicPack);
+        hallOfFame = o.hallOfFame;
         return *this;
     }
 
@@ -145,6 +146,8 @@ public:
     bool completedHalloween = false;
     bool seenModeUnlock[4] = {};
     bool seenMusicPack[4] = {};
+    std::vector<std::pair<std::string, std::string>> hallOfFame; // player name, short date
+    void AddHallOfFameEntry(const std::string& name, const std::string& date);
     std::deque<Achievement> newlyUnlocked; // "Achievement Unlocked!" toasts waiting
     bool dirty = false;
 
@@ -254,7 +257,7 @@ public:
     bool Frame(const std::vector<Input>& inputs, float dt); // false: quit
     void Draw();
 
-    static constexpr int kAchievementCols = 12;
+    static constexpr int kAchievementCols = 14; // AchievementGrid's GridLayoutGroup constraint
     int optionsPage_ = 0; // 0 main, 1 gameplay, 2 sound
     int OptionRows() const;
     bool DrawOptionsCanvas();
@@ -308,6 +311,7 @@ private:
     bool DrawNewGameCanvas();
     bool DrawTeamsCanvas();
     bool DrawUnlockCanvas();
+    bool DrawStatsCanvas();
     void InputNewGame(Input in);
     void DrawBlackFade();
     bool DrawFlashCanvas();

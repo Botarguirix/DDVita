@@ -11,6 +11,18 @@ using ui::Align;
 namespace col = ui::col;
 
 void App::DrawAchievements() {
+    if (titleUi_.loaded() && DrawStatsCanvas()) {
+        // the button hints: Select (on the hub) and Back
+        float lh = ui_.LineHeight(ui::Small), hy = ui_.H() - lh - 8, hx = ui_.W() * 0.5f - 70;
+        ui_.Fill(0, hy - 5, ui_.W(), lh + 10, PackColor(0, 0, 0, 0.6f));
+        if (metaTab_ == 0) {
+            hx += ui_.Prompt(hx, hy, platform::ButtonName(Input::Confirm), platform::ButtonSprite(Input::Confirm)) + 2;
+            hx += ui_.Text(ui::Small, hx, hy, col::White, T("General/MenuNav_Select", "Select")) + 14;
+        }
+        hx += ui_.Prompt(hx, hy, platform::ButtonName(Input::Back), platform::ButtonSprite(Input::Back)) + 2;
+        ui_.Text(ui::Small, hx, hy, col::White, T("General/MenuNav_Back", "Back"));
+        return;
+    }
     const float W = ui_.W(), H = ui_.H();
     ui_.Text(ui::Large, W * 0.5f, 8, col::White, T("FrontEnd/StatsAndAchievements", "Stats & Achievements"), Align::Center);
     // tabs (Switch flips them)
