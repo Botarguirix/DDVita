@@ -76,6 +76,7 @@ bool Init(int* width, int* height, std::string*) {
     vglInitExtended(0, 960, 544, 16 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
     sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
     sceIoMkdir(kDataDir, 0777);
     *width = 960;
     *height = 544;
@@ -143,6 +144,13 @@ bool Poll(std::vector<Input>* inputs, int* width, int* height) {
         bool now = touch.reportNum > 0;
         if (now && !touching) inputs->push_back(Input::Bars);
         touching = now;
+    }
+    // a tap on the touch screen: the toolbar's Help (the team info)
+    static bool touchingFront = false;
+    if (sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1) > 0) {
+        bool now = touch.reportNum > 0;
+        if (now && !touchingFront) inputs->push_back(Input::Help);
+        touchingFront = now;
     }
     return true;
 }

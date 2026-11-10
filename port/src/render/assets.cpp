@@ -1,6 +1,8 @@
 #include "render/assets.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 
@@ -102,7 +104,37 @@ bool Assets::LoadFont(const std::string& name, Font* f, std::string* err) {
     f->height = j["height"];
     f->ascent = j.value("ascent", f->height);
     for (auto& [code, g] : j["glyphs"].items()) f->glyphs[std::stoi(code)] = {g[0], g[1], g[2], g[3], g[4]};
-    f->tex = Tex("../" + name);
+    // the glyphs again with a transparent texel around each: drawn bilinear at fractional scales (the
+    // Vita's 1.5) a glyph then blends into nothing instead of its neighbours in the atlas
+    const Image* src = Img("../" + name);
+    if (!src) return false;
+    Image img;
+    img.w = 1024;
+    int x = 0, y = 0, rowH = 0;
+    std::vector<std::pair<int, int>> at; // where each glyph goes (in glyphs order)
+    for (auto& [code, g] : f->glyphs) {
+        int w = static_cast<int>(g.w) + 2, h = static_cast<int>(g.h) + 2;
+        if (x + w > img.w) x = 0, y += rowH, rowH = 0;
+        at.emplace_back(x, y);
+        x += w;
+        rowH = std::max(rowH, h);
+    }
+    img.h = 1;
+    while (img.h < y + rowH) img.h <<= 1;
+    img.rgba.assign(static_cast<size_t>(img.w) * img.h * 4, 0);
+    size_t i = 0;
+    for (auto& [code, g] : f->glyphs) {
+        auto [dx, dy] = at[i++];
+        int gx = static_cast<int>(g.x), gy = static_cast<int>(g.y), gw = static_cast<int>(g.w), gh = static_cast<int>(g.h);
+        for (int r = 0; r < gh; r++) {
+            if (gy + r < 0 || gy + r >= src->h || gx < 0 || gx + gw > src->w) continue;
+            std::memcpy(&img.rgba[(static_cast<size_t>(dy + 1 + r) * img.w + dx + 1) * 4], &src->rgba[(static_cast<size_t>(gy + r) * src->w + gx) * 4],
+                        static_cast<size_t>(gw) * 4);
+        }
+        g.x = static_cast<float>(dx + 1);
+        g.y = static_cast<float>(dy + 1);
+    }
+    f->tex = r_->Upload(img, false);
     return f->tex.id != 0;
 }
 
@@ -134,7 +166,7 @@ void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, cons
             continue;
         }
         // a hair inside the cell: at non-integer scales the edge texels of the neighbouring glyphs bleed in
-        const float e = 0.05f;
+        const float e = 0.0f;
         float u0 = (g.x + e) / tex.w, u1 = (g.x + g.w - e) / tex.w;
         float v1 = (g.y + e) / tex.h, v0 = (g.y + g.h - e) / tex.h; // texture is bottom-up
         r.Rect(tex, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);

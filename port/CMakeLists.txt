@@ -101,6 +101,7 @@ add_library(ddgamelib STATIC
     src/app/screens_options.cpp
     src/app/screens_stats.cpp
     src/app/screens_trial.cpp
+    src/app/screens_teaminfo.cpp
     src/app/settings.cpp
     src/app/save.cpp
     src/ui/text.cpp

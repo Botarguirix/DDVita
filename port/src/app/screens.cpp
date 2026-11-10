@@ -162,6 +162,12 @@ void App::Draw() {
     case Screen::StageStart: DrawHud(); DrawStageStart(); break;
     case Screen::Play: DrawHud(); break;
     case Screen::Pause: DrawHud(); DrawPause(); break;
+    case Screen::TeamInfo:
+        DrawHud();
+        DrawBlackFade();
+        DrawTeamInfoCanvas();
+        Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/MenuNav_Back", "Back")}});
+        break;
     case Screen::PauseConfirm:
         DrawHud();
         if (gameUi_.loaded() && DrawPauseConfirmCanvas()) {

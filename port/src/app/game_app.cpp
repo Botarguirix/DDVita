@@ -65,6 +65,7 @@ Input ScriptKey(char k) {
     case 'X': return Input::Undo;
     case 'I': return Input::Info;
     case 'H': return Input::Bars;
+    case 'W': return Input::Help;
     default: return Input::None;
     }
 }
@@ -458,7 +459,7 @@ void App::InputHowToPlay(Input in) {
         sound_.PlayCue("MenuCancel");
         ClearHelpSprites();
         // back to the How to Play entry of the menu it came from
-        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : 2);
+        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : helpReturn_ == Screen::TeamInfo ? 1 : 2);
         return;
     }
     if (Nav(in, &sel_, HelpPageCount())) {
@@ -630,6 +631,11 @@ void App::InputPlay(const std::vector<Input>& inputs, bool idle) {
         if (in == Input::Menu) {
             sound_.PlayCue("MenuSubmit");
             Go(Screen::Pause);
+            return;
+        }
+        if (in == Input::Help && gameUi_.loaded() && prefabUi_.loaded()) { // the toolbar's Help: the team info
+            sound_.PlayCue("MenuSubmit");
+            Go(Screen::TeamInfo, 0);
             return;
         }
         if (in == Input::Bars) { // the port's health bars: the rear touch pad (H on PC) shows / hides them
@@ -967,6 +973,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
     case Screen::Pause:
         for (Input in : inputs)
             if (screen_ == Screen::Pause) InputPause(in);
+        break;
+    case Screen::TeamInfo:
+        for (Input in : inputs)
+            if (screen_ == Screen::TeamInfo) InputTeamInfo(in);
         break;
     case Screen::PauseConfirm:
         for (Input in : inputs) {

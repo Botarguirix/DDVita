@@ -218,7 +218,8 @@ enum class Screen {
     KeepGoing, Overwrite, Ending, TrialComplete, HowToPlay, Achievements, SkullKeys, Unlocks,
     Intro,     // the Judgment's speech before the title (CutsceneController, "Intro" scene)
     TrialIntro, // the next trial's monsters (TrialIntro, "LeagueIntro" scene)
-    Credits     // MenuPage_Credits
+    Credits,    // MenuPage_Credits
+    TeamInfo    // Canvas_Gameplay's MenuPage_Help
 };
 
 // One stage on screen: the simulation, its view and the player's cursor.
@@ -320,6 +321,9 @@ private:
     bool DrawSkullKeysCanvas();
     bool DrawTrialCompleteCanvas();
     bool DrawHealthBars();
+    bool DrawTeamInfoCanvas();
+    void InputTeamInfo(Input in);
+    void FillAttackTooltip(ui::Canvas& c, int tip, const AttackConfig* cfg, int damage, int knockback, int stun, bool shoot);
     void BuildTimeline(ui::Canvas& c, int root, int dataRoot);
     int GameplayMenuPage(const char* page);
     void DrawGameplayMenu();

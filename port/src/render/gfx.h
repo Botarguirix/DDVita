@@ -30,6 +30,7 @@ constexpr uint32_t kWhite = 0xffffffffu;
 struct Texture {
     unsigned id = 0;
     int w = 0, h = 0;
+    bool pixel = false; // always point sampled (the pixel fonts: bilinear lets the neighbouring glyphs bleed in)
 };
 
 enum class Blend { Opaque, Cutout, Alpha };

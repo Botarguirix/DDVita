@@ -147,7 +147,7 @@ void Renderer::DrawNow(const Texture& tex, const Vertex* v, int count, Blend ble
     if (count <= 0) return;
     SetBlend(blend, depthWrite);
     glBindTexture(GL_TEXTURE_2D, tex.id ? tex.id : white_.id);
-    GLint f = in2D_ && smooth2D_ && tex.id != frame_.id ? GL_LINEAR : GL_NEAREST;
+    GLint f = in2D_ && smooth2D_ && !tex.pixel && tex.id != frame_.id ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
     glVertexPointer(3, GL_FLOAT, sizeof(Vertex), &v->x);

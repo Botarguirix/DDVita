@@ -14,7 +14,7 @@ using ui::Align;
 namespace col = ui::col;
 
 void App::DrawHowToPlay() {
-    if (helpReturn_ == Screen::Pause && st_.view) ui_.Shade(0.75f);
+    if ((helpReturn_ == Screen::Pause || helpReturn_ == Screen::TeamInfo) && st_.view) ui_.Shade(0.75f);
     const float W = ui_.W(), H = ui_.H();
     ui_.Text(ui::Large, W * 0.5f, 8, col::White, T("FrontEnd/HowToPlay", "How to Play"), Align::Center);
     // the page list
