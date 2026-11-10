@@ -46,7 +46,7 @@ bool App::DrawHudCanvas() {
         if (s) c.SetSprite(i, s);
     };
     shortcut("Toolbar/Button_Simple_GameplayMenu - Pause/ShortcutIcon", Input::Menu);
-    shortcut("Toolbar/Button_Simple_GameplayMenu - Help/ShortcutIcon", Input::Info);
+    c.SetActive(c.Find("Toolbar/Button_Simple_GameplayMenu - Help/ShortcutIcon", hud), false); // no button opens it here
     c.SetActive(c.Find("Toolbar/TeamInfoShortcut_Enemy/ShortcutIcon", hud), false);
 
     // SimpleStageNumberDisplay / SimpleGameModeDisplay
