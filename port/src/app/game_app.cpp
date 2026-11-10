@@ -1233,7 +1233,10 @@ int RunGame(int argc, char** argv) {
         return 1;
     }
     Renderer r;
-    r.Init(ww, wh);
+    // the 3D frame at the screen's own resolution where the Flashback94 640x360 would be stretched by
+    // an uneven 1.5 (the Vita): sharper than the original's point-sampled low res
+    if (ww >= 960 && ww < 1280) r.Init(ww, wh, 960, 540);
+    else r.Init(ww, wh);
 
     // missing or outdated data: say what to do (a message box, except in automated runs) and quit
     bool testing = !shotPath.empty() || !script.empty() || autoPlay;

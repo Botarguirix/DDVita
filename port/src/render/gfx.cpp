@@ -116,6 +116,7 @@ void Renderer::BeginScene(const Mat4& proj, const Mat4& view, float r, float g, 
 #ifdef __vita__
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 #endif
+    in2D_ = false;
     glViewport(0, 0, lowW_, lowH_);
     glEnable(GL_SCISSOR_TEST);
     glScissor(0, 0, lowW_, lowH_);
@@ -146,6 +147,9 @@ void Renderer::DrawNow(const Texture& tex, const Vertex* v, int count, Blend ble
     if (count <= 0) return;
     SetBlend(blend, depthWrite);
     glBindTexture(GL_TEXTURE_2D, tex.id ? tex.id : white_.id);
+    GLint f = in2D_ && smooth2D_ && tex.id != frame_.id ? GL_LINEAR : GL_NEAREST;
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, f);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, f);
     glVertexPointer(3, GL_FLOAT, sizeof(Vertex), &v->x);
     glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), &v->u);
     glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(Vertex), &v->rgba);
@@ -157,6 +161,8 @@ void Renderer::DrawIndexed(const Texture& tex, const Vertex* v, const uint16_t* 
     if (count <= 0) return;
     SetBlend(blend, true);
     glBindTexture(GL_TEXTURE_2D, tex.id ? tex.id : white_.id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glVertexPointer(3, GL_FLOAT, sizeof(Vertex), &v->x);
     glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), &v->u);
     glColorPointer(4, GL_UNSIGNED_BYTE, sizeof(Vertex), &v->rgba);
@@ -186,6 +192,7 @@ void Renderer::EndScene() {
 
 void Renderer::Begin2D() {
     Flush();
+    in2D_ = true;
     glViewport(0, 0, outW_, outH_);
     glMatrixMode(GL_PROJECTION);
     Mat4 o = Mat4::Ortho(0, static_cast<float>(outW_), static_cast<float>(outH_), 0, -1, 1);

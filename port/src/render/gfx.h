@@ -59,12 +59,16 @@ public:
     int outH() const { return outH_; }
     int lowW() const { return lowW_; }
     int lowH() const { return lowH_; }
+    // menus scaled by a fraction (1.5 on the Vita) are drawn bilinear instead of with uneven pixels
+    void SetSmooth2D(bool on) { smooth2D_ = on; }
+    bool smooth2D_ = false;
 
 private:
     int outW_ = 0, outH_ = 0, lowW_ = 640, lowH_ = 360;
     Texture frame_;   // the low-res frame (render target on the Vita, copy of the back buffer on PC)
     Texture white_;
     unsigned fbo_ = 0, depth_ = 0;
+    bool in2D_ = false;
     void SetBlend(Blend b, bool depthWrite);
     void DrawNow(const Texture& tex, const Vertex* v, int count, Blend blend, bool depthWrite);
     std::vector<Vertex> batch_;

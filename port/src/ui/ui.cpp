@@ -25,6 +25,7 @@ void Ui::Begin() {
     // whole multiples where they fit (PC); the Vita's 960x544 is 1.5x, the same factor as the 3D frame
     float fit = std::min(ow / 640.0f, oh / 360.0f);
     s_ = fit >= 2 ? std::floor(fit) : std::max(1.0f, fit);
+    r_.SetSmooth2D(s_ != std::floor(s_));
     w_ = std::floor(ow / s_);
     h_ = std::floor(oh / s_);
     ox_ = std::floor((ow - w_ * s_) * 0.5f);
