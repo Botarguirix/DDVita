@@ -129,8 +129,14 @@ void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, cons
         auto it = glyphs.find(NextCodePoint(s, &i));
         if (it == glyphs.end()) continue;
         const Glyph& g = it->second;
-        float u0 = g.x / tex.w, u1 = (g.x + g.w) / tex.w;
-        float v1 = g.y / tex.h, v0 = (g.y + g.h) / tex.h; // texture is bottom-up
+        if (it->first == ' ') {
+            x += g.advance * scale;
+            continue;
+        }
+        // a hair inside the cell: at non-integer scales the edge texels of the neighbouring glyphs bleed in
+        const float e = 0.05f;
+        float u0 = (g.x + e) / tex.w, u1 = (g.x + g.w - e) / tex.w;
+        float v1 = (g.y + e) / tex.h, v0 = (g.y + g.h - e) / tex.h; // texture is bottom-up
         r.Rect(tex, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);
         x += g.advance * scale;
     }

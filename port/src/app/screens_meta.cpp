@@ -20,7 +20,8 @@ void App::DrawAchievements() {
     if (metaTab_ == 0) {
         int n = static_cast<int>(meta_.defs.size());
         ui_.Text(ui::Small, W - 14, 40, col::Yellow, std::to_string(meta_.UnlockedCount()) + "/" + std::to_string(n), Align::Right);
-        float cell = std::min(36.0f, (W - 40) / kAchievementCols);
+        float gridRows = std::ceil(static_cast<float>(n) / kAchievementCols);
+        float cell = std::floor(std::min({36.0f, (W - 40) / kAchievementCols, (H - 64 - 92) / std::max(1.0f, gridRows)}));
         float gx = std::floor((W - cell * kAchievementCols) * 0.5f), gy = 64;
         for (int i = 0; i < n; i++) {
             const AchievementDef& d = meta_.defs[static_cast<size_t>(i)];

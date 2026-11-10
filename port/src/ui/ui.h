@@ -1,9 +1,9 @@
 // Menu drawing: the game's pixel fonts, localised text (data/loc/en.json) with Unity "smart string"
 // formatting, and the panels, buttons and sprites the screens are built from.
 //
-// Layout works in a virtual 640x360 canvas (the gameplay camera's Flashback94 resolution) scaled by
-// an integer factor to the output, so the pixel fonts stay crisp: 960x544 on the Vita uses x1 with a
-// centred canvas of 960x544 / scale, 1920x1080 on PC uses x3.
+// Layout works in a virtual 640x360 canvas (the gameplay camera's Flashback94 resolution) scaled to
+// the output: by whole multiples on PC (1920x1080 is x3), by 1.5 on the Vita's 960x544 like the 3D
+// frame.
 #pragma once
 #include <cstdint>
 #include <map>

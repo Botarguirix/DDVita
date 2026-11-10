@@ -238,7 +238,7 @@ public:
 
     static constexpr int kAchievementCols = 12;
     static constexpr int kOptionRows = 8; // 5 volumes, Suggest Undo, Auto Skip Cinematics, Restore Defaults
-    void StartIntro(); // the boot cutscene, unless cinematics are skipped
+    void StartIntro(bool force = false); // the boot cutscene, unless cinematics are skipped
     static constexpr int kMusicPopup = 100;
     static constexpr float kToastTime = 3.0f;
 

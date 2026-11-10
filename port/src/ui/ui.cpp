@@ -22,7 +22,9 @@ void Ui::Begin() {
     float ow = static_cast<float>(r_.outW()), oh = static_cast<float>(r_.outH());
     // the largest integer scale that keeps at least 640x360 (x1 on the Vita's 960x544, which then has
     // more room: the canvas grows to the screen instead of letterboxing)
-    s_ = std::max(1.0f, std::floor(std::min(ow / 640.0f, oh / 360.0f)));
+    // whole multiples where they fit (PC); the Vita's 960x544 is 1.5x, the same factor as the 3D frame
+    float fit = std::min(ow / 640.0f, oh / 360.0f);
+    s_ = fit >= 2 ? std::floor(fit) : std::max(1.0f, fit);
     w_ = std::floor(ow / s_);
     h_ = std::floor(oh / s_);
     ox_ = std::floor((ow - w_ * s_) * 0.5f);

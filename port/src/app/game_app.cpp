@@ -406,8 +406,8 @@ void App::InputAchievements(Input in) {
     }
 }
 
-void App::StartIntro() {
-    if (settings_.autoSkipCinematics || testing) {
+void App::StartIntro(bool force) {
+    if (!force && (settings_.autoSkipCinematics || testing)) {
         GoToTitle();
         return;
     }
@@ -1072,7 +1072,7 @@ int RunGame(int argc, char** argv) {
     Date date;
     bool fixedDate = false;
     float shotTime = 0, speed = 1;
-    bool autoPlay = false;
+    bool autoPlay = false, intro = false;
     std::vector<std::string> pos;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -1089,6 +1089,8 @@ int RunGame(int argc, char** argv) {
             metaFile = argv[++i];
         } else if (a == "--auto") {
             autoPlay = true;
+        } else if (a == "--intro") { // the boot cutscene even in automated runs (screenshots)
+            intro = true;
         } else {
             pos.push_back(a);
         }
@@ -1157,7 +1159,7 @@ int RunGame(int argc, char** argv) {
         app->NewRun(pos.size() > 2 ? static_cast<GameMode>(std::atoi(pos[2].c_str())) : GameMode::Normal,
                     pos.size() > 3 ? std::atoi(pos[3].c_str()) : 0, std::atoi(mode.c_str()));
     } else {
-        app->StartIntro();
+        app->StartIntro(intro);
     }
 
     double last = platform::Seconds();
