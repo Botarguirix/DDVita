@@ -5,6 +5,7 @@
 // The stage being played reports through sim::MetaSink; replays of saved stages have no sink, so
 // nothing is counted twice.
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 
@@ -294,6 +295,13 @@ void Meta::NewStage(const Game& g) {
     enemiesHit_ = enemiesKilled_ = spikeKills_ = 0;
     turnsWithPasses_.clear();
     lastAttacker_.clear();
+    enemyHitsThisTurn_.clear();
+    tilesMovedThisTurn_.clear();
+    surrounded_.clear();
+    attacker_ = shooter_ = ballKillShooter_ = -1;
+    attackKills_ = 0;
+    shotToFinishLine_ = enemyHadBall_ = ballRecovered_ = false;
+    lastPhase_ = Phase::Starting;
     const Run& run = g.run;
     if (run.currentStageNumberAsOverallStage() == 0) goaliesLeftGame_ = false; // AchievementManagerDeathball.NewGame
     if (run.currentStage == 0) goaliesLeftTrial_ = false;                     // NewTrial
@@ -303,14 +311,57 @@ void Meta::NewStage(const Game& g) {
 void Meta::OnEvent(const Game& g, const Event& e) {
     if (stage_ != &g) NewStage(g);
     switch (e.type) {
-    case Ev::TurnStarted: turnsWithPasses_.push_back(false); break; // AchievementManagerDeathball.NewTurn
+    case Ev::TurnStarted:
+        turnsWithPasses_.push_back(false); // AchievementManagerDeathball.NewTurn
+        enemyHitsThisTurn_.clear();
+        tilesMovedThisTurn_.clear();
+        CheckSurrounded(g);
+        break;
+    case Ev::PhaseChanged:
+        if (static_cast<Phase>(e.value) != Phase::StageEnded) lastPhase_ = static_cast<Phase>(e.value);
+        if (static_cast<Phase>(e.value) == Phase::PlayerInput) CheckSurrounded(g);
+        break;
+    case Ev::Attack: // a new attack: its kills count together (KillMultipleWithOneAttack / KappaTwoKills)
+        attacker_ = e.actor;
+        attackKills_ = 0;
+        break;
+    case Ev::BallShot:
+        shooter_ = e.actor;
+        ballKillShooter_ = -1;
+        reboundDist_ = -1;
+        if (e.to.x >= g.fieldX - 1) shotToFinishLine_ = true; // Ball.shotToFinishLine
+        break;
+    case Ev::BallPass:
+        // Ball.GA_Ball_Pass: from one corner of the first column to the opposite one by the goal
+        if (e.from.x == 0 && e.to.x == g.fieldX - 2 &&
+            ((e.from.y == 0 && e.to.y == g.fieldY - 1) || (e.from.y == g.fieldY - 1 && e.to.y == 0)))
+            Unlock(Achievement::PassOppositeCorners);
+        break;
+    case Ev::BallRebound:
+        // Ball.GA_Ball_Shoot: the shooter catches the rebound of a killing shot
+        reboundTo_ = e.to;
+        reboundDist_ = e.from.x - e.to.x;
+        if (ballKillShooter_ >= 0 && g.PositionIsWithinField(e.to)) {
+            const FieldTile* t = const_cast<Game&>(g).GetTile(e.to);
+            if (t->occupant && t->occupant->uid == ballKillShooter_) Progress(Achievement::KillThenRebound, e.from.x - e.to.x);
+        }
+        break;
+    case Ev::BallAcquired: {
+        const Entity* a = g.FindEntity(e.actor);
+        if (a && a->entityType == EntityType::Enemy) enemyHadBall_ = true;
+        else if (a && a->entityType == EntityType::Player && enemyHadBall_) ballRecovered_ = true; // Ball.ballWasRecoveredFromEnemies
+        break;
+    }
     case Ev::Hit: {
         // AchievementManagerDeathball.ActorWasHit
         lastAttacker_[e.actor] = e.extra;
+        const Entity* by = e.extra > 0 ? g.FindEntity(e.extra) : nullptr;
+        if (by && by->entityType == EntityType::Ball) Progress(Achievement::DealFiveDamageWithBall, e.value); // Ball shot damage
         const Enemy* victim = AsEnemy(g, e.actor);
-        if (!victim || e.extra < 0) break;
+        if (!victim || e.extra <= 0) break; // Hit: extra 0 = no attacker
         enemiesHit_++;
         if (const Enemy* attacker = AsEnemy(g, e.extra)) {
+            Progress(Achievement::EnemyHitByTwoEnemies, ++enemyHitsThisTurn_[e.actor]); // Enemy.OnHitStart
             Unlock(Achievement::EnemyHitOtherEnemy);
             if (TypeOf(victim) == EnemyType::Kappa && TypeOf(attacker) == EnemyType::Kappa) Unlock(Achievement::KappaHitKappa);
         }
@@ -319,6 +370,7 @@ void Meta::OnEvent(const Game& g, const Event& e) {
     case Ev::Died: {
         const Entity* dead = g.FindEntity(e.actor);
         if (!dead) break;
+        CheckBlood(g);
         if (dead->entityType == EntityType::Player) {
             AddStat(Stat::Deaths, 1);
             break;
@@ -332,6 +384,21 @@ void Meta::OnEvent(const Game& g, const Event& e) {
         if (const Enemy* victim = AsEnemy(g, e.actor)) {
             enemiesKilled_++;
             Unlock(Achievement::KillAnEnemy);
+            // kills of one attack (Attack.Attack_Coroutine)
+            if (attackerUid == attacker_) {
+                attackKills_++;
+                if (attacker->entityType == EntityType::Player) Progress(Achievement::KillMultipleWithOneAttack, attackKills_);
+                else if (TypeOf(AsEnemy(g, attackerUid)) == EnemyType::Kappa) Progress(Achievement::KappaTwoKills, attackKills_);
+            }
+            if (attacker->entityType == EntityType::Ball) {
+                ballKillShooter_ = shooter_;
+                if (reboundDist_ > 0 && g.PositionIsWithinField(reboundTo_)) {
+                    const FieldTile* t = const_cast<Game&>(g).GetTile(reboundTo_);
+                    if (t->occupant && t->occupant->uid == shooter_) Progress(Achievement::KillThenRebound, reboundDist_);
+                }
+            }
+            if (TypeOf(victim) == EnemyType::Hatchery && victim->cSpawning && !victim->cSpawning->spawnedAnyChildren)
+                Unlock(Achievement::StopHatcherySpawning);
             if (victim->isGoalieEnemy()) {
                 Unlock(Achievement::KillGoalie);
                 // a ball shot from the first column killing a goalie on the last
@@ -358,7 +425,12 @@ void Meta::OnEvent(const Game& g, const Event& e) {
     }
     case Ev::Move: {
         const Entity* a = g.FindEntity(e.actor);
-        if (a && a->entityType == EntityType::Obstacle) AddStat(Stat::RocksPushed, 1); // BreakableWall pushed
+        if (a && a->entityType == EntityType::Obstacle) {
+            AddStat(Stat::RocksPushed, 1); // BreakableWall pushed
+            CheckTrappedEnemies(g);
+        }
+        // Actor.GA_Actor_Hit: a Rooted Maw knocked back
+        if (const Enemy* en = AsEnemy(g, e.actor); en && en->isRootedMaw() && !(e.from == e.to)) Unlock(Achievement::PushMaw);
         break;
     }
     case Ev::SpawnBlocked: AddStat(Stat::SpawnsBlocked, 1); break;
@@ -371,7 +443,14 @@ void Meta::OnPlayerAction(const Game& g, const Command& c) {
     if (stage_ != &g) NewStage(g);
     switch (c.actionConfig->action) {
     case ActorAction::Char_Wait: AddStat(Stat::Rests, 1); break;
-    case ActorAction::Char_Step: AddStat(Stat::TilesMoved, std::max(1, c.distance)); break;
+    case ActorAction::Char_Step: {
+        int n = std::max(1, c.distance);
+        AddStat(Stat::TilesMoved, n);
+        int& moved = tilesMovedThisTurn_[c.player ? c.player->uid : 0];
+        moved += n;
+        if (moved > 2) Progress(Achievement::MoveManyTilesInOneTurn, moved); // Player.CheckMoveManyTilesAchievement
+        break;
+    }
     case ActorAction::Player_Pass: {
         AddStat(Stat::Passes, 1);
         int turn = g.Turn() - 1; // AchievementManagerDeathball.PlayerPassed
@@ -385,7 +464,11 @@ void Meta::OnPlayerAction(const Game& g, const Command& c) {
 void Meta::OnStageEnded(const Game& g) {
     if (stage_ != &g) NewStage(g);
     AddStat(Stat::GoldAcquired, g.goldEarned());
+    CheckBlood(g);
     if (g.gameEndedInDefeat) return;
+    // GameController.PlayerWon
+    if (lastPhase_ == Phase::EnemiesActing && g.BallReachedOtherSide() && g.ball->isHeldByPlayer()) Unlock(Achievement::WinStageDuringEnemyTurn);
+    if (g.lightningHazardRowsSpawned >= g.fieldX - 1) Unlock(Achievement::FullLightningWin); // HazardManager.FieldIsFullOfLightning
     const StageResults& res = g.results();
     // StageScore: the stat counters of a won stage
     if (res.touchdown) AddStat(Stat::StageWinsTouchdowns, 1);
@@ -416,6 +499,51 @@ void Meta::OnStageEnded(const Game& g) {
     StageWon(g);
 }
 
+// Player.CheckSurrounded: monsters on all four sides
+void Meta::CheckSurrounded(const Game& g) {
+    static const V2 dirs[4] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    Game& gm = const_cast<Game&>(g);
+    for (const Player* p : g.players) {
+        if (!p->isAlive) continue;
+        bool all = true;
+        for (V2 d : dirs) {
+            V2 q{p->gridPos.x + d.x, p->gridPos.y + d.y};
+            if (!g.PositionIsWithinField(q) || !gm.GetTile(q)->containsEnemy()) {
+                all = false;
+                break;
+            }
+        }
+        if (all && std::find(surrounded_.begin(), surrounded_.end(), p->uid) == surrounded_.end()) surrounded_.push_back(p->uid);
+    }
+}
+
+// BreakableWall: an enemy boxed in by rocks (or the field's edge) on all four sides
+void Meta::CheckTrappedEnemies(const Game& g) {
+    static const V2 dirs[4] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    Game& gm = const_cast<Game&>(g);
+    for (const Enemy* e : g.enemies) {
+        if (!e->isAlive) continue;
+        int n = 0;
+        for (V2 d : dirs) {
+            V2 q{e->gridPos.x + d.x, e->gridPos.y + d.y};
+            if (!g.PositionIsWithinField(q)) n++;
+            else if (const Actor* o = gm.GetTile(q)->occupant; o && o->entityType == EntityType::Obstacle) n++;
+        }
+        if (n == 4) {
+            Unlock(Achievement::TrapEnemyWithWalls);
+            return;
+        }
+    }
+}
+
+// FieldManager: blood on three quarters of the field
+void Meta::CheckBlood(const Game& g) {
+    if (Unlocked(Achievement::LotsOfBlood)) return;
+    int n = 0, need = static_cast<int>(std::nearbyint(g.fieldX * g.fieldY * 0.75));
+    for (const FieldTile& t : g.grid) n += t.hasBlood();
+    if (n >= need) Unlock(Achievement::LotsOfBlood);
+}
+
 // AchievementManagerDeathball.StageWon
 void Meta::StageWon(const Game& g) {
     bool goaliesAlive = false, anyEnemy = false;
@@ -432,6 +560,13 @@ void Meta::StageWon(const Game& g) {
     if (enemiesHit_ == 0) Unlock(Achievement::WinWithoutHitting);
     const Run& run = g.run;
     const StageResults& res = g.results();
+    if (shotToFinishLine_ && res.touchdown) Unlock(Achievement::LongShotThenTouchdown);
+    if (ballRecovered_ && res.touchdown) Unlock(Achievement::ReclaimBallThenTouchdown);
+    for (int uid : surrounded_)
+        if (const Entity* p = g.FindEntity(uid); p && static_cast<const Actor*>(p)->isAlive) {
+            Unlock(Achievement::SurviveSurrounded);
+            break;
+        }
     if (res.rank == static_cast<int>(Rank::S)) Unlock(Achievement::RankS);
     // GetLongestConsecutiveSRankWins
     int run_ = 0, best = 0;

@@ -49,6 +49,9 @@ int PlayRun(const GameData& data, int seed, GameMode mode, const std::string& pa
         rec.current = app::StageRecord{};
         rec.current.ball = chooser.Next(0, 3); // Neutral / Harder / Easier
         run.ballEffect = static_cast<DifficultyEffect>(rec.current.ball);
+        rec.current.swap = run.swapPositions = chooser.Next(0, 2) == 0;
+        if (run.activePlayers.size() == 2 && chooser.Next(0, 2) == 0) run.ballCarrierIndex ^= 1;
+        rec.current.carrier = run.ballCarrierIndex;
         Game g(run);
         g.Start();
         int guard = 0;
@@ -78,6 +81,7 @@ int PlayRun(const GameData& data, int seed, GameMode mode, const std::string& pa
             if (app::ApplyMeta(run, code)) rec.current.meta.push_back(code), purchases++;
         }
         if (!run.AdvanceStage()) break;
+        run.swapPositions = false;
         rec.stages.push_back(rec.current);
         cleared++;
 

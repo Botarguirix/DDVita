@@ -236,6 +236,8 @@ void App::StartStage() {
     rec_.current.inputs.clear();
     rec_.current.meta.clear();
     rec_.current.ball = static_cast<int>(run_->ballEffect);
+    rec_.current.swap = run_->swapPositions;
+    rec_.current.carrier = run_->ballCarrierIndex;
     defeat_ = false;
     Go(Screen::StageStart, 0);
 }
@@ -301,6 +303,7 @@ void App::NextStage(bool saveAndQuit) {
     rec_.stages.push_back(rec_.current);
     rec_.restartUsed = false; // LeagueManager.IncrementStage
     run_->AdvanceStage();
+    run_->swapPositions = false;
     sound_.IncrementStageMusicIndex();
     rec_.current = StageRecord{};
     rec_.current.ball = static_cast<int>(run_->ballEffect);
@@ -470,6 +473,19 @@ void App::InputStageStart(Input in) {
             run_->ballEffect = order[j]; // BallMods.SetBallMod: the stage is rebuilt with the new ball
             StartStage();
         }
+        return;
+    }
+    // Swap Positions (L) and, with two players, swap the ball carrier (Square): the stage is set up again
+    if (in == Input::Switch) {
+        sound_.PlayCue("MenuMove");
+        run_->swapPositions = !run_->swapPositions;
+        StartStage();
+        return;
+    }
+    if (in == Input::PassTake && run_->activePlayers.size() == 2) {
+        sound_.PlayCue("MenuMove");
+        run_->ballCarrierIndex = run_->ballCarrierIndex == 0 ? 1 : 0;
+        StartStage();
         return;
     }
     if (in == Input::Menu) {

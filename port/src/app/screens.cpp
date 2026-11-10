@@ -351,10 +351,13 @@ void App::DrawStageStart() {
         ui_.SpriteTex(face.tex, face.def, px, py, 32, 32);
         ui_.Text(ui::Small, px + 36, py + 2, col::White, hp.playerName);
         ui_.Text(ui::Small, px + 36, py + 16, col::Grey, ClassName(hp.playerClassConfig) + " - " + PerkName(hp.perkChain));
+        if (static_cast<int>(i) == run.ballCarrierIndex) ui_.Sprite(bm ? bm->ballSprite : "", px + 20, py + 18, 14, 14);
     }
     ui_.Button(x + w * 0.5f - 90, y + h - 36, 180, 24, T("Gameplay/StageStart_Play", "Play Deathball"), true);
     std::vector<std::pair<Input, std::string>> hints = {{Input::Confirm, T("Gameplay/StageStart_Play", "Play Deathball")}};
     if (canSwap) hints.emplace_back(Input::Right, T("Gameplay/StageStart_SwapBall", "Swap Ball"));
+    hints.emplace_back(Input::Switch, T("Gameplay/StageStart_SwapPlayers", "Swap Positions"));
+    if (run.activePlayers.size() == 2) hints.emplace_back(Input::PassTake, T("General/Ball", "Ball"));
     hints.emplace_back(Input::Menu, T("Gameplay/Pause", "Pause"));
     Hints(ui_, hints);
 }

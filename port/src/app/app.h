@@ -171,6 +171,18 @@ private:
     std::vector<bool> turnsWithPasses_;
     bool goaliesLeftTrial_ = false, goaliesLeftGame_ = false;
     std::map<int, int> lastAttacker_; // victim uid -> attacker uid of the last hit
+    std::map<int, int> enemyHitsThisTurn_;  // Enemy.timesHitByEnemiesThisTurn
+    std::map<int, int> tilesMovedThisTurn_; // Player.tilesMovedThisTurn
+    std::vector<int> surrounded_;           // playersSurroundedThisStage
+    int attacker_ = -1, attackKills_ = 0;   // the attack playing out and its kills (Attack.cs)
+    int shooter_ = -1, ballKillShooter_ = -1;
+    sim::V2 reboundTo_;
+    int reboundDist_ = -1; // the current shot's rebound (it may play before the kill)
+    bool shotToFinishLine_ = false, enemyHadBall_ = false, ballRecovered_ = false;
+    sim::Phase lastPhase_ = sim::Phase::Starting;
+    void CheckSurrounded(const sim::Game& g);
+    void CheckTrappedEnemies(const sim::Game& g);
+    void CheckBlood(const sim::Game& g);
     void NewStage(const sim::Game& g);
     void StageWon(const sim::Game& g);
     void GameComplete(const sim::Game& g);

@@ -97,6 +97,8 @@ void Game::SpawnTreasure(V2 pos, const TreasureConfig* c) {
 
 void Game::SpawnPlayers() {
     V2 starts[2] = {{0, fieldY - 1}, {0, 0}};
+    // PlayerManager.SwapPlayerPositions: two players trade places, a lone player takes the other start
+    if (run.swapPositions) std::swap(starts[0], starts[1]);
     for (size_t i = 0; i < run.activePlayers.size() && i < 2; i++) {
         HumanPlayer* hp = run.activePlayers[i];
         if (run.ballCarrierIndex >= static_cast<int>(run.activePlayers.size())) run.ballCarrierIndex = 0;

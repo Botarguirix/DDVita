@@ -23,7 +23,8 @@ bool SaveRecord(const std::string& path, const RunRecord& r) {
     j["date"] = {r.date.year, r.date.month, r.date.day};
     j["restartUsed"] = r.restartUsed;
     json stages = json::array();
-    for (const StageRecord& s : r.stages) stages.push_back({{"ball", s.ball}, {"inputs", s.inputs}, {"meta", s.meta}});
+    for (const StageRecord& s : r.stages)
+        stages.push_back({{"ball", s.ball}, {"swap", s.swap}, {"carrier", s.carrier}, {"inputs", s.inputs}, {"meta", s.meta}});
     j["stages"] = std::move(stages);
     j["ball"] = r.current.ball; // the ball already chosen for the next stage
     // write then rename, so a crash or power loss never leaves half a file
@@ -54,6 +55,8 @@ bool LoadRecord(const std::string& path, RunRecord* r) {
         for (const json& s : j["stages"]) {
             StageRecord sr;
             sr.ball = s.value("ball", 0);
+            sr.swap = s.value("swap", false);
+            sr.carrier = s.value("carrier", -1);
             sr.inputs = s["inputs"].get<std::vector<int>>();
             sr.meta = s.value("meta", std::vector<int>{});
             rec.stages.push_back(std::move(sr));
@@ -93,6 +96,8 @@ bool ApplyMeta(Run& run, int code) {
 bool ReplayStages(Run& run, const RunRecord& r) {
     for (const StageRecord& sr : r.stages) {
         run.ballEffect = static_cast<DifficultyEffect>(sr.ball);
+        run.swapPositions = sr.swap;
+        if (sr.carrier >= 0) run.ballCarrierIndex = sr.carrier;
         Game g(run);
         g.Start();
         for (int in : sr.inputs) {
@@ -109,6 +114,7 @@ bool ReplayStages(Run& run, const RunRecord& r) {
             if (!ApplyMeta(run, code)) return false;
         if (!run.AdvanceStage()) return false;
     }
+    run.swapPositions = false;
     return true;
 }
 

@@ -14,6 +14,8 @@ namespace dd::app {
 
 struct StageRecord {
     int ball = 0;            // DifficultyEffect chosen on the stage start panel
+    bool swap = false;       // Swap Positions
+    int carrier = -1;        // ballCarrierIndex at the start (-1: as the run left it)
     std::vector<int> inputs; // >= 0 index into Game::GetCommands(), kUndoYes / kUndoNo answer SuggestUndo
     std::vector<int> meta;   // team management after the stage: RunRecord::Upgrade / Recruit codes
 };

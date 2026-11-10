@@ -182,6 +182,7 @@ public:
     std::vector<HumanPlayer*> activePlayers, deadPlayers, reservePlayers;
     int gold = 0;
     int ballCarrierIndex = 0;        // SessionStatTracker.ballCarrierIndex
+    bool swapPositions = false;      // StageStartPanel "Swap Positions" (this stage only)
     int easyBallModsUsed = 0, hardBallModsUsed = 0;
     DifficultyEffect ballEffect = DifficultyEffect::Neutral; // BallMods.currentEffect
     int currentTrial = 0, currentStage = 0;                  // LeagueManager
