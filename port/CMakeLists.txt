@@ -90,6 +90,8 @@ add_library(ddgamelib STATIC
     src/app/screens.cpp
     src/app/screens_help.cpp
     src/app/screens_meta.cpp
+    src/app/screens_hud.cpp
+    src/app/screens_stagestart.cpp
     src/app/settings.cpp
     src/app/save.cpp
     src/ui/text.cpp

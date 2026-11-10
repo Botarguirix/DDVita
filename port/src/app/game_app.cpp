@@ -94,6 +94,7 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     help_.Load(dataDir + "/help.json");
     titleUi_.Load(dataDir + "/render/ui_title.json");
     gameUi_.Load(dataDir + "/render/ui_game.json");
+    prefabUi_.Load(dataDir + "/render/ui_prefabs.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
     hasSave_ = RecordExists(savePath_);
@@ -494,43 +495,70 @@ void App::InputTeams(Input in) {
 }
 
 // StageStartPanel: swap ball (Easy / Normal / Hard), then Play Deathball
+// StageStartPanel's buttons: sel_ 0 Play Deathball, 1 Swap Players, 2 Swap Ball, 3..5 the Easy /
+// Normal / Hard balls (the row above). L and Square keep their shortcuts.
 void App::InputStageStart(Input in) {
     bool ballMods = !run_->team->traitBlockBallMods();
+    bool two = run_->activePlayers.size() == 2;
     static const DifficultyEffect order[3] = {DifficultyEffect::Easier, DifficultyEffect::Neutral, DifficultyEffect::Harder};
-    if (ballMods && (in == Input::Left || in == Input::Right)) {
-        int i = run_->ballEffect == DifficultyEffect::Easier ? 0 : run_->ballEffect == DifficultyEffect::Neutral ? 1 : 2;
-        int j = std::clamp(i + (in == Input::Right ? 1 : -1), 0, 2);
-        if (j != i) {
-            sound_.PlayCue("MenuMove");
-            run_->ballEffect = order[j]; // BallMods.SetBallMod: the stage is rebuilt with the new ball
-            StartStage();
-        }
-        return;
-    }
-    // Swap Positions (L) and, with two players, swap the ball carrier (Square): the stage is set up again
-    if (in == Input::Switch) {
-        sound_.PlayCue("MenuMove");
+    auto rebuild = [&] { // the stage is set up again; the cursor stays where it was
+        int keep = sel_;
+        StartStage();
+        sel_ = keep;
+    };
+    auto swapPlayers = [&] {
+        sound_.PlayCue("MenuSubmit");
         run_->swapPositions = !run_->swapPositions;
-        StartStage();
-        return;
-    }
-    if (in == Input::PassTake && run_->activePlayers.size() == 2) {
-        sound_.PlayCue("MenuMove");
+        rebuild();
+    };
+    auto swapBall = [&] {
+        if (!two) return sound_.PlayCue("MenuInvalid");
+        sound_.PlayCue("MenuSubmit");
         run_->ballCarrierIndex = run_->ballCarrierIndex == 0 ? 1 : 0;
-        StartStage();
-        return;
-    }
-    if (in == Input::Menu) {
+        rebuild();
+    };
+    int cur = run_->ballEffect == DifficultyEffect::Easier ? 0 : run_->ballEffect == DifficultyEffect::Neutral ? 1 : 2;
+    int prev = sel_;
+    switch (in) {
+    case Input::Up:
+        if (sel_ == 0) sel_ = 2;
+        else if (sel_ == 2) sel_ = 1;
+        else if (sel_ == 1 && ballMods) sel_ = 3 + cur;
+        break;
+    case Input::Down:
+        if (sel_ >= 3) sel_ = 1;
+        else if (sel_ == 1) sel_ = 2;
+        else if (sel_ == 2) sel_ = 0;
+        break;
+    case Input::Left:
+    case Input::Right:
+        if (sel_ >= 3) sel_ = std::clamp(sel_ + (in == Input::Right ? 1 : -1), 3, 5);
+        break;
+    case Input::Switch: swapPlayers(); return;
+    case Input::PassTake: swapBall(); return;
+    case Input::Menu:
         sound_.PlayCue("MenuSubmit");
         Go(Screen::Pause);
         return;
-    }
-    if (in == Input::Confirm) {
+    case Input::Confirm:
+        if (sel_ == 1) return swapPlayers();
+        if (sel_ == 2) return swapBall();
+        if (sel_ >= 3) { // mooDeathballChangeBall: BallMods.SetBallMod (the stage is rebuilt with the new ball)
+            sound_.PlayCue("MenuSubmit");
+            if (sel_ - 3 != cur) {
+                run_->ballEffect = order[sel_ - 3];
+                rebuild();
+            }
+            return;
+        }
         sound_.PlayCue("MenuSubmit");
         st_.started = true;
         sound_.StageStarted(*st_.game);
         Go(Screen::Play);
+        return;
+    default: break;
     }
+    if (sel_ != prev) sound_.PlayCue("MenuMove");
 }
 
 void App::InputPlay(const std::vector<Input>& inputs, bool idle) {

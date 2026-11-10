@@ -197,6 +197,7 @@ public:
     int currentStageNumberAsOverallStage() const { return currentTrial * 3 + currentStage; }
     const Stage& CurrentStage() const { return session.trials[currentTrial].stages[currentStage]; }
     const BallModifierConfig* BallModConfig() const; // BallMods.currentConfig
+    const BallModifierConfig* BallModConfigFor(DifficultyEffect e) const; // BallMods.GetConfigForCurrentStage
 
     void PlayerDied(int playerNumber);     // HumanTeam.PlayerDied
     void ResetStagePlayerReferences();
@@ -708,6 +709,7 @@ public:
     int StaminaCost(const PlayerActionConfig* c, const Player* p, int distance = 0) const;
     int Turn() const { return turn_; }
     int TurnPar() const { return turnPar_; }
+    int ParBonusRankTarget() const; // StageScore.GetParBonusRankTarget (turns under par, negative)
     int ParDifference() const { return turn_ - turnPar_; }
     bool anyPlayerPassedFinishLine() const { return playerOnFinishLine_ != nullptr; }
     bool gameEndedInDefeat = false;

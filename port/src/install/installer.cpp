@@ -12,10 +12,10 @@ namespace dd::install {
 
 namespace {
 
-// render v2: the arenas' Billboard props; ui 1: the menus' Canvas trees
+// render v2: the arenas' Billboard props; ui 1: the menus' Canvas trees, 2: + the gameplay UI prefabs
 const json kVersion = {{"format", 1},
                        {"steps", {{"extract", 1}, {"gamedata", 1}, {"render", 2}, {"fonts", 1}, {"loc", 1},
-                                  {"help", 1}, {"achievements", 1}, {"audio", 2}, {"ui", 1}}}};
+                                  {"help", 1}, {"achievements", 1}, {"audio", 2}, {"ui", 2}}}};
 
 std::string FindDataDir(const std::string& gameDir) {
     for (const std::string& d : ListDir(gameDir, true)) {
@@ -77,7 +77,9 @@ static bool InstallSteps(const std::string& gameDir, const std::string& outDir, 
         // the menus' Canvas trees (title scene, gameplay scene) need the script trees too
         report("Menus", 0.08f);
         ok = ok && ExportUi(g, ex, "level3", outDir + "/render/ui_title.json", err) &&
-             ExportUi(g, ex, "level4", outDir + "/render/ui_game.json", err);
+             ExportUi(g, ex, "level4", outDir + "/render/ui_game.json", err) &&
+             // the gameplay scene's UI prefabs (PlayerInfoPanel, the turn nodes, popups...)
+             ExportUi(g, ex, "sharedassets4.assets", outDir + "/render/ui_prefabs.json", err);
         g.SetScriptTrees({}); // the exporters only need the MonoBehaviours' base fields from here on
         if (!ok) return false;
     }

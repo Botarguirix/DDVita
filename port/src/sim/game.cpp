@@ -682,6 +682,12 @@ std::vector<Command> Game::GetCommands() {
 // ---------------------------------------------------------------------------------------------
 // StageScore / Gold
 // ---------------------------------------------------------------------------------------------
+int Game::ParBonusRankTarget() const {
+    const ScoringConfig& sc = data.scoring;
+    FieldSize f = run.CurrentStage().fieldSize;
+    return f == FieldSize::Small ? sc.parBonusRankTargetSmall : f == FieldSize::Medium ? sc.parBonusRankTargetMedium : sc.parBonusRankTargetLarge;
+}
+
 void Game::CalculateStageScore() {
     const ScoringConfig& sc = data.scoring;
     const TeamConfig* team = run.team;

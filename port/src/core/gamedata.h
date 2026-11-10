@@ -112,7 +112,7 @@ struct PerkConfig {
 };
 
 struct PerkChain {
-    std::string id, name, chainName;
+    std::string id, name, chainName, icon; // icon: its sprite (Perks_*)
     Perk perk = Perk::NONE;
     std::vector<const PerkConfig*> perks;
     bool allowCarriers = false, allowRunners = false, allowBrawlers = false;

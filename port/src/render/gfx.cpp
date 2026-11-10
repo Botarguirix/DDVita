@@ -208,6 +208,13 @@ void Renderer::Rect(const Texture& tex, float x, float y, float w, float h, floa
     batch_.insert(batch_.end(), v, v + 6);
 }
 
+void Renderer::Tris(const Texture& tex, const float* p, int n, uint32_t c) {
+    const Texture& t = tex.id ? tex : white_;
+    if (!batch_.empty() && batchTex_.id != t.id) Flush();
+    batchTex_ = t;
+    for (int i = 0; i < n; i++) batch_.push_back({p[i * 4], p[i * 4 + 1], 0, p[i * 4 + 2], p[i * 4 + 3], c});
+}
+
 void Renderer::Clip(float x, float y, float w, float h) {
     Flush();
     if (w <= 0 || h <= 0) {

@@ -63,6 +63,45 @@ void Ui::Quad(const gfx::Texture& tex, float x, float y, float w, float h, float
     r_.Rect(tex, ox_ + x * s_, oy_ + y * s_, w * s_, h * s_, u0, v0, u1, v1, color);
 }
 
+void Ui::Radial(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color,
+                float amount, int origin, bool clockwise) {
+    amount = std::clamp(amount, 0.0f, 1.0f);
+    if (amount <= 0) return;
+    if (amount >= 1) return Quad(tex, x, y, w, h, u0, v0, u1, v1, color);
+    // angles on screen (y down): 0 is up, clockwise positive
+    static const float kStart[4] = {3.14159265f, 1.5707963f, 0.0f, -1.5707963f}; // bottom, right, top, left
+    float a0 = kStart[origin & 3], sweep = amount * 6.2831853f * (clockwise ? 1.0f : -1.0f);
+    float cx = x + w * 0.5f, cy = y + h * 0.5f;
+    auto edge = [&](float a, float* px, float* py) { // the rect's border along the ray from the centre
+        float dx = std::sin(a), dy = -std::cos(a);
+        float tx = std::fabs(dx) > 1e-6f ? (w * 0.5f) / std::fabs(dx) : 1e9f;
+        float ty = std::fabs(dy) > 1e-6f ? (h * 0.5f) / std::fabs(dy) : 1e9f;
+        float t = std::min(tx, ty);
+        *px = cx + dx * t;
+        *py = cy + dy * t;
+    };
+    auto push = [&](std::vector<float>& v, float px, float py) {
+        v.push_back(ox_ + px * s_);
+        v.push_back(oy_ + py * s_);
+        v.push_back(u0 + (u1 - u0) * (px - x) / w);
+        v.push_back(v0 + (v1 - v0) * (py - y) / h);
+    };
+    const int steps = 48;
+    std::vector<float> v;
+    float px0, py0;
+    edge(a0, &px0, &py0);
+    int n = std::max(1, static_cast<int>(std::ceil(steps * amount)));
+    for (int i = 1; i <= n; i++) {
+        float px1, py1;
+        edge(a0 + sweep * static_cast<float>(i) / static_cast<float>(n), &px1, &py1);
+        push(v, cx, cy);
+        push(v, px0, py0);
+        push(v, px1, py1);
+        px0 = px1, py0 = py1;
+    }
+    r_.Tris(tex, v.data(), static_cast<int>(v.size() / 4), color);
+}
+
 void Ui::Clip(float x, float y, float w, float h) {
     if (w <= 0 || h <= 0) r_.Clip(0, 0, 0, 0);
     else r_.Clip(std::floor(ox_ + x * s_), std::floor(oy_ + y * s_), std::ceil(w * s_), std::ceil(h * s_));

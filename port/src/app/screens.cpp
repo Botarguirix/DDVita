@@ -213,6 +213,9 @@ void App::DrawHud() {
     Game& g = *st_.game;
     Run& run = *run_;
     const float W = ui_.W(), H = ui_.H();
+    // (the stage start panel has the screen to itself: GameplayUI shows once the stage is played)
+    bool canvas = screen_ == Screen::StageStart ? gameUi_.loaded() : screen_ == Screen::Play && DrawHudCanvas();
+    if (!canvas) {
     // top bar: stage, turn / par, gold
     ui_.Fill(0, 0, W, 22, PackColor(0, 0, 0, 0.55f));
     ui_.Text(ui::Medium, 8, 3, col::White, StageName());
@@ -245,6 +248,7 @@ void App::DrawHud() {
         if (p->isHoldingBall()) ui_.Text(ui::Small, x + 50, y + 48, col::Yellow, T("General/Ball", "Ball"));
     }
 
+    }
     // command hints, with the cost of the command under the cursor
     if (screen_ == Screen::Play && !st_.view->Busy() && g.phase() == Phase::PlayerInput) {
         std::vector<std::pair<Input, std::string>> hints;
@@ -311,6 +315,14 @@ void App::DrawHud() {
 
 // StageStartPanel: header, ball choice, the team and Play Deathball
 void App::DrawStageStart() {
+    if (gameUi_.loaded() && DrawStageStartCanvas()) {
+        std::vector<std::pair<Input, std::string>> hints = {{Input::Confirm, T("General/MenuNav_Select", "Select")}};
+        hints.emplace_back(Input::Switch, T("Gameplay/StageStart_SwapPlayers", "Swap Positions"));
+        if (run_->activePlayers.size() == 2) hints.emplace_back(Input::PassTake, T("Gameplay/StageStart_SwapBall", "Swap Ball"));
+        hints.emplace_back(Input::Menu, T("Gameplay/Pause", "Pause"));
+        Hints(ui_, hints);
+        return;
+    }
     Run& run = *run_;
     const float W = ui_.W(), H = ui_.H();
     float w = std::min(420.0f, W - 40), h = 230, x = std::floor((W - w) * 0.5f), y = std::floor((H - h) * 0.5f);

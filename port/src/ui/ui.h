@@ -71,6 +71,10 @@ public:
     void SpriteTex(const gfx::Texture& tex, const gfx::SpriteDef& def, float x, float y, float w, float h, uint32_t color = col::White);
     // A textured quad in virtual coordinates with explicit UVs (no fitting)
     void Quad(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color);
+    // Image.Type Filled with FillMethod Radial360: the part of a quad swept clockwise (or not) from
+    // `origin` (0 bottom, 1 right, 2 top, 3 left) through amount * 360 degrees
+    void Radial(const gfx::Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color,
+                float amount, int origin, bool clockwise);
     // Clip drawing to a virtual rectangle (w <= 0: off)
     void Clip(float x, float y, float w, float h);
     // The menu font for a font asset of the game (SinsGold, CompassGold, EffortsPro...)

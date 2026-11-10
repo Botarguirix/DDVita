@@ -179,11 +179,13 @@ Run::Run(const GameData& d, Session s, const TeamConfig* t, GameMode m)
     }
 }
 
-const BallModifierConfig* Run::BallModConfig() const {
+const BallModifierConfig* Run::BallModConfig() const { return BallModConfigFor(ballEffect); }
+
+const BallModifierConfig* Run::BallModConfigFor(DifficultyEffect effect) const {
     const SessionConfig& c = data.session;
     if (team->traitBlockBallMods()) return c.ballModifierDefault;
     int stage = currentStageNumberAsOverallStage();
-    switch (ballEffect) {
+    switch (effect) {
     case DifficultyEffect::Easier:
         return stage < static_cast<int>(c.ballModsEasier.size()) ? c.ballModsEasier[stage] : c.ballModifierDefault;
     case DifficultyEffect::Harder:

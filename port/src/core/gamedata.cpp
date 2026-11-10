@@ -330,6 +330,7 @@ bool GameData::Load(const std::string& path, std::string* error) {
         p->id = id;
         p->name = S(o, "_name");
         p->chainName = S(o, "chainName");
+        p->icon = AssetName(o.value("icon", json()));
         p->perk = static_cast<Perk>(I(o, "perk"));
         for (const auto& r : o.value("perks", json::array())) p->perks.push_back(Lookup(perkConfigs_, r));
         p->allowCarriers = B(o, "allowCarriers");

@@ -70,6 +70,7 @@ bool Canvas::Load(const std::string& path) {
                 c.fillMethod = I(k, "FillMethod");
                 c.fillOrigin = I(k, "FillOrigin");
                 c.fillCenter = I(k, "FillCenter", 1) != 0;
+                c.fillClockwise = I(k, "FillClockwise", 1) != 0;
                 c.preserveAspect = I(k, "PreserveAspect") != 0;
                 c.fillAmount = F(k, "FillAmount", 1);
                 c.ppum = F(k, "PPUM", 1);
@@ -171,6 +172,37 @@ int Canvas::FindDeep(const std::string& name, int from) const {
         if (d >= 0) return d;
     }
     return -1;
+}
+
+int Canvas::Instantiate(const Canvas& src, int srcRoot, int parent) {
+    if (srcRoot < 0 || srcRoot >= src.size()) return -1;
+    int base = size();
+    // the subtree, depth first, renumbered from base
+    std::vector<int> order;
+    std::vector<int> stack{srcRoot};
+    while (!stack.empty()) {
+        int i = stack.back();
+        stack.pop_back();
+        order.push_back(i);
+        const auto& k = src.node(i).kids;
+        for (auto it = k.rbegin(); it != k.rend(); ++it) stack.push_back(*it);
+    }
+    std::unordered_map<int, int> map;
+    for (size_t q = 0; q < order.size(); q++) map[order[q]] = base + static_cast<int>(q);
+    for (int i : order) {
+        CNode c = src.node(i);
+        c.parent = i == srcRoot ? parent : map[c.parent];
+        for (int& k : c.kids) k = map[k];
+        nodes_.push_back(std::move(c));
+    }
+    if (parent >= 0) node(parent).kids.push_back(base);
+    return base;
+}
+
+void Canvas::Truncate(int mark) {
+    if (mark >= size()) return;
+    nodes_.resize(static_cast<size_t>(mark));
+    for (CNode& n : nodes_) n.kids.erase(std::remove_if(n.kids.begin(), n.kids.end(), [&](int k) { return k >= mark; }), n.kids.end());
 }
 
 std::string Canvas::TextOf(const CNode& n) const {
@@ -470,13 +502,13 @@ void Canvas::DrawNode(int i, float alpha) {
 void Canvas::DrawImage(const CNode& n, float alpha) {
     if (n.rect.w <= 0 || n.rect.h <= 0) return;
     float x = n.rect.x, y = screenH_ - (n.rect.y + n.rect.h), w = n.rect.w, h = n.rect.h;
-    const gfx::SpriteDef* d = n.sprite.empty() ? nullptr : ui_->assets().Sprite(n.sprite);
+    const gfx::SpriteDef* d = n.rtTex ? &n.rtDef : n.sprite.empty() ? nullptr : ui_->assets().Sprite(n.sprite);
     auto draw = [&](float dx, float dy, uint32_t color) {
         if (!d) { // no sprite: Unity draws a plain rect in the colour
             ui_->Fill(x + dx, y + dy, w, h, color);
             return;
         }
-        const gfx::Texture& tex = ui_->assets().Tex(d->texture);
+        const gfx::Texture& tex = n.rtTex ? *n.rtTex : ui_->assets().Tex(d->texture);
         if (!tex.id) return;
         float tw = static_cast<float>(tex.w), th = static_cast<float>(tex.h);
         auto quad = [&](float qx, float qy, float qw, float qh, float px0, float py0, float px1, float py1) {
@@ -509,7 +541,11 @@ void Canvas::DrawImage(const CNode& n, float alpha) {
             qy = y + (h - qh) * (1 - n.piv[1]);
         }
         float u0 = d->x, u1 = d->x + d->w, v0 = d->y, v1 = d->y + d->h;
-        if (n.imageType == 3 && n.fillAmount < 1) { // Filled: horizontal / vertical (radial drawn the same way)
+        if (n.imageType == 3 && n.fillMethod == 4 && n.fillAmount < 1) { // Filled, Radial360
+            ui_->Radial(tex, qx + dx, qy + dy, qw, qh, u0 / tw, v1 / th, u1 / tw, v0 / th, color, n.fillAmount, n.fillOrigin, n.fillClockwise);
+            return;
+        }
+        if (n.imageType == 3 && n.fillAmount < 1) { // Filled: horizontal / vertical (90 / 180 radial drawn the same way)
             float a = std::clamp(n.fillAmount, 0.0f, 1.0f);
             if (n.fillMethod == 1) { // vertical: origin 0 bottom, 1 top
                 float cut = qh * (1 - a), vcut = (v1 - v0) * (1 - a);

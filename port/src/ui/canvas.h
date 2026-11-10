@@ -31,7 +31,7 @@ struct CNode {
     int imageType = 0; // Simple, Sliced, Tiled, Filled
     int fillMethod = 0, fillOrigin = 0;
     float fillAmount = 1, ppum = 1;
-    bool fillCenter = true, preserveAspect = false;
+    bool fillCenter = true, preserveAspect = false, fillClockwise = true;
 
     // ---- Text ----
     bool hasText = false, textOn = true;
@@ -60,6 +60,9 @@ struct CNode {
     bool mask = false, showMaskGraphic = true;
 
     std::vector<std::string> scripts; // every MonoBehaviour's class (MenuPage, MenuObject...)
+    // a sprite made at run time (the procedural player portraits) in place of `sprite`
+    const gfx::Texture* rtTex = nullptr;
+    gfx::SpriteDef rtDef;
 
     // ---- computed each layout pass ----
     CRect rect;
@@ -94,6 +97,24 @@ public:
     void SetTextColor(int i, uint32_t c) {
         if (i >= 0) node(i).textColor = c;
     }
+    void SetImageColor(int i, uint32_t c) {
+        if (i >= 0) node(i).imageColor = c;
+    }
+    void SetFill(int i, float amount) {
+        if (i >= 0) node(i).fillAmount = amount;
+    }
+    void SetRuntimeSprite(int i, const gfx::Texture* tex, const gfx::SpriteDef& def) {
+        if (i < 0) return;
+        node(i).rtTex = tex;
+        node(i).rtDef = def;
+    }
+
+    // Object.Instantiate: a copy of `src`'s subtree at `srcRoot` (a prefab) as the last child of
+    // `parent`; returns the copy's root.
+    int Instantiate(const Canvas& src, int srcRoot, int parent);
+    // The nodes added after Mark() are removed by Truncate(mark) (the instances of a stage).
+    int Mark() const { return size(); }
+    void Truncate(int mark);
 
     // Lays out and draws the subtree of `root` over the whole virtual screen (the root is the
     // Canvas: its rect is the screen). `loc` supplies the localised texts.
