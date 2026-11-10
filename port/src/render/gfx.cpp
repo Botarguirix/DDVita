@@ -85,6 +85,7 @@ Texture Renderer::Upload(const Image& img, bool repeat) {
 }
 
 void Renderer::Free(Texture& t) {
+    Flush(); // the batch may still use it
     if (t.id) glDeleteTextures(1, &t.id);
     t = Texture{};
 }
@@ -111,6 +112,7 @@ void Renderer::SetBlend(Blend b, bool depthWrite) {
 }
 
 void Renderer::BeginScene(const Mat4& proj, const Mat4& view, float r, float g, float b) {
+    Flush();
 #ifdef __vita__
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 #endif
@@ -129,7 +131,18 @@ void Renderer::BeginScene(const Mat4& proj, const Mat4& view, float r, float g, 
     glEnable(GL_TEXTURE_2D);
 }
 
+void Renderer::Flush() {
+    if (batch_.empty()) return;
+    DrawNow(batchTex_, batch_.data(), static_cast<int>(batch_.size()), Blend::Alpha, false);
+    batch_.clear();
+}
+
 void Renderer::Draw(const Texture& tex, const Vertex* v, int count, Blend blend, bool depthWrite) {
+    Flush();
+    DrawNow(tex, v, count, blend, depthWrite);
+}
+
+void Renderer::DrawNow(const Texture& tex, const Vertex* v, int count, Blend blend, bool depthWrite) {
     if (count <= 0) return;
     SetBlend(blend, depthWrite);
     glBindTexture(GL_TEXTURE_2D, tex.id ? tex.id : white_.id);
@@ -140,6 +153,7 @@ void Renderer::Draw(const Texture& tex, const Vertex* v, int count, Blend blend,
 }
 
 void Renderer::DrawIndexed(const Texture& tex, const Vertex* v, const uint16_t* idx, int count, Blend blend) {
+    Flush();
     if (count <= 0) return;
     SetBlend(blend, true);
     glBindTexture(GL_TEXTURE_2D, tex.id ? tex.id : white_.id);
@@ -150,6 +164,7 @@ void Renderer::DrawIndexed(const Texture& tex, const Vertex* v, const uint16_t* 
 }
 
 void Renderer::EndScene() {
+    Flush();
 #ifdef __vita__
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 #else
@@ -170,6 +185,7 @@ void Renderer::EndScene() {
 }
 
 void Renderer::Begin2D() {
+    Flush();
     glViewport(0, 0, outW_, outH_);
     glMatrixMode(GL_PROJECTION);
     Mat4 o = Mat4::Ortho(0, static_cast<float>(outW_), static_cast<float>(outH_), 0, -1, 1);
@@ -186,7 +202,10 @@ void Renderer::Rect(const Texture& tex, float x, float y, float w, float h, floa
         {x, y, 0, u0, v0, c},     {x + w, y, 0, u1, v0, c},     {x + w, y + h, 0, u1, v1, c},
         {x, y, 0, u0, v0, c},     {x + w, y + h, 0, u1, v1, c}, {x, y + h, 0, u0, v1, c},
     };
-    Draw(tex, v, 6, Blend::Alpha, false);
+    const Texture& t = tex.id ? tex : white_;
+    if (!batch_.empty() && batchTex_.id != t.id) Flush();
+    batchTex_ = t;
+    batch_.insert(batch_.end(), v, v + 6);
 }
 
 void Renderer::Fill(float x, float y, float w, float h, uint32_t c) { Rect(white_, x, y, w, h, 0, 0, 1, 1, c); }

@@ -99,6 +99,66 @@ int HumanPlayer::GetBallKnockback() const {
 
 int HumanPlayer::GetBallStun() const { return run->data.levelUp.ballStunBase; }
 
+int HumanPlayer::GetStatLevel(PlayerStat s) const {
+    switch (s) {
+    case PlayerStat::Stamina: return staminaLevel;
+    case PlayerStat::AP: return apLevel;
+    case PlayerStat::Strength: return strengthLevel;
+    case PlayerStat::Perk: return perkLevel;
+    default: return 0;
+    }
+}
+
+// LevelUpConfig.GetStatLevelCap: the class limit, never beyond the upgrade table
+int HumanPlayer::GetStatLevelCap(PlayerStat s) const {
+    const LevelUpConfig& l = run->data.levelUp;
+    auto cap = [](int table, int cls) { return cls > table ? table : cls; };
+    switch (s) {
+    case PlayerStat::Perk: return static_cast<int>(perkChain->perks.size());
+    case PlayerStat::Stamina: return cap(static_cast<int>(l.staminaUpgrades.size()), playerClassConfig->maxLevelStamina);
+    case PlayerStat::AP: return cap(static_cast<int>(l.actionPointUpgrades.size()), playerClassConfig->maxLevelActionPoints);
+    case PlayerStat::Strength: return cap(static_cast<int>(l.strengthUpgrades.size()), playerClassConfig->maxLevelStrength);
+    default: return 0;
+    }
+}
+
+int HumanPlayer::GetNextUpgradePrice(PlayerStat s) const {
+    const LevelUpConfig& l = run->data.levelUp;
+    switch (s) {
+    case PlayerStat::Perk: return perkChain->perks[static_cast<size_t>(perkLevel)]->perkAdditionalCost * l.perkCostMultiplier;
+    case PlayerStat::Stamina: return l.staminaUpgrades[static_cast<size_t>(staminaLevel)].price;
+    case PlayerStat::Strength: return l.strengthUpgrades[static_cast<size_t>(strengthLevel)].price;
+    default: return 0;
+    }
+}
+
+int HumanPlayer::GetStatValue(PlayerStat s) const {
+    switch (s) {
+    case PlayerStat::Stamina: return GetMaxStamina();
+    case PlayerStat::Strength: return GetAttackStrength();
+    case PlayerStat::Perk: return GetPerkStatValue();
+    default: return 0;
+    }
+}
+
+bool HumanPlayer::AffordableUpgradeAvailable(PlayerStat s) const {
+    return !StatIsMaxLevel(s) && run->gold >= GetNextUpgradePrice(s);
+}
+
+void HumanPlayer::LevelUpPlayerStat(PlayerStat s) {
+    if (StatIsMaxLevel(s)) return;
+    switch (s) {
+    case PlayerStat::Stamina: staminaLevel++; break;
+    case PlayerStat::AP: apLevel++; break;
+    case PlayerStat::Strength: strengthLevel++; break;
+    case PlayerStat::Perk:
+        perkLevel++;
+        CachePerkConfig();
+        break;
+    default: break;
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------------------------
@@ -167,6 +227,42 @@ int Run::GetFinalScoreTotal() const {
         }
     }
     return GetStageScores() + bonus;
+}
+
+// StageEndUI.AffordableUpgradesOrRecruitsAvailable
+bool Run::AffordableUpgradesOrRecruitsAvailable() const {
+    for (const HumanPlayer* hp : activePlayers)
+        if (hp->AffordableUpgradeAvailable(PlayerStat::Stamina) || hp->AffordableUpgradeAvailable(PlayerStat::Strength) ||
+            hp->AffordableUpgradeAvailable(PlayerStat::Perk))
+            return true;
+    return !teamIsAtMaximumCapacity() && !reservePlayers.empty() && gold >= data.levelUp.newRecruitPrice;
+}
+
+// PlayerStatUpgrader.TryUpgrade
+bool Run::TryUpgrade(int activeIndex, PlayerStat s) {
+    if (activeIndex < 0 || activeIndex >= static_cast<int>(activePlayers.size())) return false;
+    HumanPlayer* hp = activePlayers[static_cast<size_t>(activeIndex)];
+    if (hp->StatIsMaxLevel(s)) return false;
+    int price = hp->GetNextUpgradePrice(s);
+    if (gold < price) return false;
+    hp->LevelUpPlayerStat(s);
+    gold -= price;
+    return true;
+}
+
+// NewRecruitButton.TryRecruit -> HumanTeam.SendReservePlayerToTeam
+bool Run::TryRecruit(int reserveIndex) {
+    if (teamIsAtMaximumCapacity() || reserveIndex < 0 || reserveIndex >= static_cast<int>(reservePlayers.size()) || reserveIndex > 2)
+        return false;
+    int price = data.levelUp.newRecruitPrice;
+    if (gold < price) return false;
+    HumanPlayer* hp = reservePlayers[static_cast<size_t>(reserveIndex)];
+    hp->active = true;
+    hp->stageStartedIndex = currentStageNumberAsOverallStage() + 1;
+    activePlayers.push_back(hp);
+    reservePlayers.erase(reservePlayers.begin() + reserveIndex);
+    gold -= price;
+    return true;
 }
 
 bool Run::AdvanceStage() {

@@ -85,7 +85,15 @@ add_library(ddgamelib STATIC
     src/audio/mixer.cpp
     src/audio/sound.cpp
     src/app/game_app.cpp
+    src/app/help.cpp
+    src/app/meta.cpp
+    src/app/screens.cpp
+    src/app/screens_help.cpp
+    src/app/screens_meta.cpp
+    src/app/settings.cpp
     src/app/save.cpp
+    src/ui/text.cpp
+    src/ui/ui.cpp
 )
 target_link_libraries(ddgamelib PUBLIC ddsim ddinstalllib)
 if(NOT MSVC)
@@ -173,11 +181,21 @@ if(VITA)
 endif()
 
 if(NOT VITA)
-    find_package(SDL2 REQUIRED)
-    target_link_libraries(ddgamelib PUBLIC SDL2::SDL2 opengl32)
+    # the windowed game needs SDL2; without it only the command-line tools are built
+    find_package(SDL2 QUIET)
+    find_package(OpenGL QUIET)
+    if(SDL2_FOUND)
+    if(WIN32)
+        target_link_libraries(ddgamelib PUBLIC SDL2::SDL2 opengl32)
+    else()
+        target_link_libraries(ddgamelib PUBLIC SDL2::SDL2 OpenGL::GL)
+    endif()
     add_executable(ddgame src/app/main.cpp)
     target_link_libraries(ddgame PRIVATE ddgamelib SDL2::SDL2main SDL2::SDL2)
-    if(MINGW)
+    else()
+        message(STATUS "SDL2 not found: ddgame is not built")
+    endif()
+    if(SDL2_FOUND AND MINGW)
         # only SDL2.dll next to the exe (copied by the build)
         target_link_options(ddgame PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lwinpthread -Wl,--no-whole-archive,-Bdynamic)
         add_custom_command(TARGET ddgame POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:ddgame>)
@@ -191,6 +209,8 @@ if(NOT VITA)
     target_link_libraries(simtest PRIVATE ddsim)
     add_executable(savetest tools/savetest.cpp src/app/save.cpp)
     target_link_libraries(savetest PRIVATE ddsim)
+    add_executable(metatest tools/metatest.cpp src/app/meta.cpp src/app/save.cpp)
+    target_link_libraries(metatest PRIVATE ddsim)
     add_executable(audiotest tools/audiotest.cpp src/audio/mixer.cpp src/audio/sound.cpp)
     target_link_libraries(audiotest PRIVATE ddsim)
     add_executable(ddinstall tools/ddinstall.cpp)

@@ -48,6 +48,9 @@ public:
     void Begin2D();                        // pixel coordinates of the output, origin top-left
     void Rect(const Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color);
     void Fill(float x, float y, float w, float h, uint32_t color);
+    // Rect / Fill quads are batched per texture (one draw call per run instead of per glyph): drawn
+    // when the texture or the GL state changes, and at the end of the frame by Flush().
+    void Flush();
     int outW() const { return outW_; }
     int outH() const { return outH_; }
     int lowW() const { return lowW_; }
@@ -59,6 +62,9 @@ private:
     Texture white_;
     unsigned fbo_ = 0, depth_ = 0;
     void SetBlend(Blend b, bool depthWrite);
+    void DrawNow(const Texture& tex, const Vertex* v, int count, Blend blend, bool depthWrite);
+    std::vector<Vertex> batch_;
+    Texture batchTex_;
 };
 
 } // namespace dd::gfx

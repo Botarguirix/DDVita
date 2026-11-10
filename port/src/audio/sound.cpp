@@ -42,6 +42,7 @@ bool Sound::Load(const std::string& dir, Mixer* mixer, std::string* err) {
     }
     for (auto& [name, c] : j["clips"].items()) clipFiles_[name] = c["file"];
     for (auto& [k, v] : j["named"].items()) named_[k] = v;
+    if (j.contains("crowd") && j["crowd"].contains("source")) crowdVolume_ = j["crowd"]["source"].value("volume", 1.0f);
     for (auto& [k, v] : j["enemyDeath"].items()) enemyDeath_[k] = v;
     for (auto& [k, v] : j["attack"].items()) attack_[k] = v;
     for (auto& pack : j["music"]["packs"]) {
@@ -156,6 +157,33 @@ void Sound::PlayTriumphantMusic() {
 void Sound::PlayJingle(const std::string& namedKey) {
     auto it = named_.find(namedKey);
     if (mixer_ && it != named_.end()) mixer_->PlayStream(Mixer::Jingle, ClipPath(it->second), false, 0, 0);
+}
+
+void Sound::PlayNamedMusic(const std::string& namedKey, float delay, float fadeIn) {
+    auto it = named_.find(namedKey);
+    if (!mixer_ || it == named_.end()) return;
+    swapTimer_ = -1;
+    currentTrack_ = it->second;
+    mixer_->PlayStream(Mixer::Music, ClipPath(it->second), true, 0, fadeIn, delay);
+}
+
+bool Sound::triumphantMusicIsPlaying() const {
+    auto it = named_.find("music.triumphant");
+    return mixer_ && it != named_.end() && currentTrack_ == it->second && swapTimer_ < 0 && mixer_->StreamPlaying(Mixer::Music);
+}
+
+void Sound::StartCrowd() {
+    auto it = named_.find("loop.crowd");
+    if (!mixer_ || it == named_.end() || crowdOn_) return;
+    crowdOn_ = true;
+    mixer_->PlayStream(Mixer::Crowd, ClipPath(it->second), true, 0, 1.0f);
+    mixer_->FadeStream(Mixer::Crowd, crowdVolume_, 1.0f, false);
+}
+
+void Sound::StopCrowd(float fadeSeconds) {
+    if (!mixer_ || !crowdOn_) return;
+    crowdOn_ = false;
+    mixer_->FadeStream(Mixer::Crowd, 0, fadeSeconds, true);
 }
 
 void Sound::Update(float dt) {

@@ -87,26 +87,46 @@ bool Assets::Load(const std::string& dir, Renderer* r, std::string* err) {
     for (auto& [name, frames] : j.items())
         for (auto& f : frames)
             anims_[name].push_back({f[0].is_null() ? "" : f[0].get<std::string>(), f[1].get<float>()});
-    if (!ReadJson(dir + "/font.json", &j, err)) return false;
-    font_.height = j["height"];
-    for (auto& [code, g] : j["glyphs"].items())
-        font_.glyphs[std::stoi(code)] = {g[0], g[1], g[2], g[3], g[4]};
-    font_.tex = Tex("../font"); // data/render/font.tex
+    if (!LoadFont("font", &font_, err)) return false; // data/render/font.tex
+    const char* names[3] = {"font_s", "font_m", "font_l"};
+    for (int i = 0; i < 3; i++) {
+        std::string ignored;
+        if (!LoadFont(names[i], &menuFonts_[i], &ignored)) std::fprintf(stderr, "no %s: menus use the HUD font\n", names[i]);
+    }
     return true;
+}
+
+bool Assets::LoadFont(const std::string& name, Font* f, std::string* err) {
+    json j;
+    if (!ReadJson(dir_ + "/" + name + ".json", &j, err)) return false;
+    f->height = j["height"];
+    f->ascent = j.value("ascent", f->height);
+    for (auto& [code, g] : j["glyphs"].items()) f->glyphs[std::stoi(code)] = {g[0], g[1], g[2], g[3], g[4]};
+    f->tex = Tex("../" + name);
+    return f->tex.id != 0;
+}
+
+int NextCodePoint(const std::string& s, size_t* i) {
+    unsigned char c = static_cast<unsigned char>(s[(*i)++]);
+    int extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+    if (!extra || *i + extra > s.size()) return c;
+    int cp = c & (0x3f >> extra);
+    for (int k = 0; k < extra; k++) cp = (cp << 6) | (static_cast<unsigned char>(s[(*i)++]) & 0x3f);
+    return cp;
 }
 
 float Font::Width(const std::string& s, float scale) const {
     float w = 0;
-    for (unsigned char c : s) {
-        auto it = glyphs.find(c);
+    for (size_t i = 0; i < s.size();) {
+        auto it = glyphs.find(NextCodePoint(s, &i));
         if (it != glyphs.end()) w += it->second.advance * scale;
     }
     return w;
 }
 
 void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, const std::string& s) const {
-    for (unsigned char c : s) {
-        auto it = glyphs.find(c);
+    for (size_t i = 0; i < s.size();) {
+        auto it = glyphs.find(NextCodePoint(s, &i));
         if (it == glyphs.end()) continue;
         const Glyph& g = it->second;
         float u0 = g.x / tex.w, u1 = (g.x + g.w) / tex.w;

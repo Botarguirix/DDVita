@@ -381,12 +381,24 @@ bool GameData::Load(const std::string& path, std::string* error) {
         p->basicWanderer = Lookup(enemies_, o["basicWanderer"]);
         p->basicAggressive = Lookup(enemies_, o["basicAggressive"]);
         p->basicGoalie = Lookup(enemies_, o["basicGoalie"]);
+        p->allowRestartStage = B(o, "allowRestartStage", true);
+        p->allowSaveAndQuit = B(o, "allowSaveAndQuit", true);
+        p->allowTeamSelection = B(o, "allowTeamSelection", true);
+        p->unlockCriteriaAchievementCount = I(o, "unlockCriteriaAchievementCount");
+        p->unlockPopupText = S(o, "unlockPopupText");
+        for (const auto& r : o.value("unlockCriteriaAchievements", json::array()))
+            if (std::string a = RefId(r); !a.empty() && objects.contains(a)) p->unlockCriteriaAchievements.push_back(I(objects[a], "achievement"));
     }
     for (auto& [id, p] : teams_) {
         const json& o = objects[id];
         p->id = id;
         p->name = S(o, "_name");
         p->teamName = S(o, "teamName");
+        p->description = S(o, "description");
+        p->unlockCost = I(o, "unlockCost", 4);
+        p->keysAwardedPerTrial = I(o, "keysAwardedPerTrial", 1);
+        if (const json& ra = o.value("requiredAchievement", json()); ra.is_object() && B(ra, "enabled"))
+            if (std::string a = RefId(ra["value"]); !a.empty() && objects.contains(a)) p->requiredAchievement = I(objects[a], "achievement");
         for (const auto& s : o["players"]) {
             TeamConfig::PlayerSetup ps;
             ps.playerClassConfig = Lookup(playerClasses_, s["playerClassConfig"]);
@@ -403,6 +415,14 @@ bool GameData::Load(const std::string& path, std::string* error) {
         p->name = S(o, "_name");
         p->seasonalEvent = static_cast<SeasonalEvent>(I(o, "seasonalEvent"));
         p->treasureConfig = Lookup(treasures_, o["treasureConfig"]);
+        p->allowSeason = B(o, "allowSeason", true);
+        p->preventHighScoreSaving = B(o, "preventHighScoreSaving");
+        if (std::string l = S(o, "pluralLabelString"); !l.empty()) p->pluralLabel = l;
+        if (const json& j = o.value("titleScreenJingle", json()); j.is_object()) p->titleScreenJingle = B(j, "enabled");
+        if (const json& j = o.value("titleLogo", json()); j.is_object() && B(j, "enabled")) {
+            p->titleLogo = true;
+            p->titleLogoSprite = AssetName(j.value("value", json()));
+        }
     }
 
     // Singletons.

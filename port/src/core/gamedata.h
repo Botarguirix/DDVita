@@ -258,6 +258,10 @@ struct GameModeConfig {
     const EnemyConfig* basicWanderer = nullptr;
     const EnemyConfig* basicAggressive = nullptr;
     const EnemyConfig* basicGoalie = nullptr;
+    bool allowRestartStage = true, allowSaveAndQuit = true, allowTeamSelection = true;
+    int unlockCriteriaAchievementCount = 0;
+    std::vector<int> unlockCriteriaAchievements; // Achievement ids
+    std::string unlockPopupText;
     bool isDailyChallengeMode() const { return mode == GameMode::DailyChallenge; }
 };
 
@@ -266,7 +270,10 @@ struct TeamConfig {
         const PlayerClassConfig* playerClassConfig = nullptr; // null = random
         const PerkChain* playerPerk = nullptr;                // null = random
     };
-    std::string id, name, teamName;
+    std::string id, name, teamName, description;
+    int unlockCost = 4;
+    int requiredAchievement = 0; // Achievement id (0 = none)
+    int keysAwardedPerTrial = 1;
     std::vector<PlayerSetup> players;
     std::vector<const PerkChain*> blockedPerks;
     const TeamTraitConfig* positiveTrait = nullptr;
@@ -297,6 +304,10 @@ struct SeasonalEventConfig {
     std::string id, name;
     SeasonalEvent seasonalEvent = SeasonalEvent::None;
     const TreasureConfig* treasureConfig = nullptr;
+    bool allowSeason = true, preventHighScoreSaving = false;
+    std::string pluralLabel = "Gems";
+    bool titleScreenJingle = false, titleLogo = false;
+    std::string titleLogoSprite;
 };
 
 class GameData {
@@ -322,6 +333,7 @@ public:
 
     const PlayerClassConfig* GetPlayerClassConfig(PlayerClass c) const;
     const GameModeConfig* GetGameModeConfig(GameMode m) const;
+    const SeasonalEventConfig* SeasonalConfig(SeasonalEvent e) const { return seasonal[static_cast<int>(e)]; }
     // PerkManager.GetPerkFromPerkChain
     const PerkConfig* GetPerkFromPerkChain(const PerkChain* chain, int level) const;
 

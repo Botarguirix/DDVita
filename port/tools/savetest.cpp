@@ -19,7 +19,7 @@ using namespace dd::sim;
 using dd::app::RunRecord;
 
 namespace {
-int failures = 0;
+int failures = 0, purchases = 0;
 
 uint64_t StartHash(Run& run) {
     Game g(run);
@@ -46,14 +46,16 @@ int PlayRun(const GameData& data, int seed, GameMode mode, const std::string& pa
     MonoRandom chooser(seed ^ 0x5eed);
     int cleared = 0;
     for (;;) {
+        rec.current = app::StageRecord{};
+        rec.current.ball = chooser.Next(0, 3); // Neutral / Harder / Easier
+        run.ballEffect = static_cast<DifficultyEffect>(rec.current.ball);
         Game g(run);
         g.Start();
-        rec.current.clear();
         int guard = 0;
         while (g.phase() != Phase::StageEnded && guard++ < 3000) {
             if (g.phase() == Phase::SuggestUndo) {
                 bool yes = chooser.Next(0, 2) == 0;
-                rec.current.push_back(yes ? RunRecord::kUndoYes : RunRecord::kUndoNo);
+                rec.current.inputs.push_back(yes ? RunRecord::kUndoYes : RunRecord::kUndoNo);
                 g.RespondToUndoSuggestion(yes);
                 continue;
             }
@@ -66,9 +68,16 @@ int PlayRun(const GameData& data, int seed, GameMode mode, const std::string& pa
             if (chooser.Next(0, 3) == 0)
                 for (int i : ok)
                     if (cmds[static_cast<size_t>(i)].onTile && cmds[static_cast<size_t>(i)].direction == kRight) pick = i;
-            if (g.Select(cmds[static_cast<size_t>(pick)])) rec.current.push_back(pick);
+            if (g.Select(cmds[static_cast<size_t>(pick)])) rec.current.inputs.push_back(pick);
         }
-        if (g.phase() != Phase::StageEnded || g.gameEndedInDefeat || !run.AdvanceStage()) break;
+        if (g.phase() != Phase::StageEnded || g.gameEndedInDefeat) break;
+        // team management: random purchases (some refused, which are not recorded)
+        for (int tries = chooser.Next(0, 6); tries > 0; tries--) {
+            int code = chooser.Next(0, 4) == 0 ? RunRecord::Recruit(chooser.Next(0, 3))
+                                               : RunRecord::Upgrade(chooser.Next(0, 2), static_cast<PlayerStat>(chooser.Next(0, 2) == 0 ? 0 : chooser.Next(2, 4)));
+            if (app::ApplyMeta(run, code)) rec.current.meta.push_back(code), purchases++;
+        }
+        if (!run.AdvanceStage()) break;
         rec.stages.push_back(rec.current);
         cleared++;
 
@@ -84,7 +93,9 @@ int PlayRun(const GameData& data, int seed, GameMode mode, const std::string& pa
             failures++;
             break;
         }
-        if (replay.currentTrial != run.currentTrial || replay.currentStage != run.currentStage ||
+        replay.ballEffect = run.ballEffect;
+        if (replay.gold != run.gold || replay.activePlayers.size() != run.activePlayers.size() ||
+            replay.currentTrial != run.currentTrial || replay.currentStage != run.currentStage ||
             replay.GetFinalScoreTotal() != run.GetFinalScoreTotal() || StartHash(replay) != StartHash(run)) {
             std::printf("seed %d stage %d: replayed run differs\n", seed, cleared);
             failures++;
@@ -112,6 +123,6 @@ int main(int argc, char** argv) {
     std::string path = argc > 5 ? argv[5] : "savetest.json";
     int checked = 0;
     for (int s = first; s < first + count; s++) checked += PlayRun(data, s, mode, path);
-    std::printf("runs %d saves checked %d failures %d\n", count, checked, failures);
+    std::printf("runs %d saves checked %d purchases %d failures %d\n", count, checked, purchases, failures);
     return failures ? 1 : 0;
 }

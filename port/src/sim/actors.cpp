@@ -83,11 +83,12 @@ void Actor::ReduceHealth(int dmg) {
     if (health < 0) health = 0;
 }
 
-void Actor::GA_Actor_Die(const AttackData&) {
+void Actor::GA_Actor_Die(const AttackData& data) {
     g->ClearTileOccupant(this, gridPos, true);
     isAlive = false;
     active = false;
-    g->Emit(Ev::Died, this, {}, gridPos);
+    // value: killed by a ball shot; extra: the attacker's uid (-1: none), for the achievements
+    g->Emit(Ev::Died, this, {}, gridPos, data.ballShot ? 1 : 0, data.attacker ? data.attacker->uid : -1);
 }
 
 // ---------------------------------------------------------------------------------------------

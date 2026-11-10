@@ -32,6 +32,7 @@ void Game::Emit(Ev type, const Entity* actor, V2 from, V2 to, int value, int ext
     e.value = value;
     e.extra = extra;
     events.push_back(std::move(e));
+    if (meta) meta->OnEvent(*this, events.back());
 }
 
 void Game::Log(const std::string& text) {
@@ -171,6 +172,7 @@ void Game::ChangePhase(Phase p) {
         run.ResetStagePlayerReferences();
         CalculateStageScore();
         ClearAndHideAllIntentions();
+        if (meta) meta->OnStageEnded(*this);
         break;
     default: break;
     }
@@ -221,6 +223,7 @@ bool Game::Select(const Command& c) {
 void Game::ExecutePlayerAction() {
     Command command = command_;
     Player* p = command.player;
+    if (meta) meta->OnPlayerAction(*this, command);
     switch (command.actionConfig->action) {
     case ActorAction::Char_Step: p->GA_Char_Step(command.direction); break;
     case ActorAction::Char_Attack: p->cAttack->Attack_Coroutine(command.direction); break;

@@ -269,6 +269,7 @@ void Mixer::Mix(int16_t* out, int frames) {
                       voices_.end());
         MixStream(streams_[Music], acc, frames, gain_[MasterGroup] * gain_[MusicGroup]);
         MixStream(streams_[Jingle], acc, frames, gain_[MasterGroup] * gain_[JingleGroup]);
+        MixStream(streams_[Crowd], acc, frames, gain_[MasterGroup] * gain_[SoundGroup]);
     }
     for (int i = 0; i < frames * 2; i++) out[i] = static_cast<int16_t>(std::clamp(acc[i], -32768.0f, 32767.0f));
 }
