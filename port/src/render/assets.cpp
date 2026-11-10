@@ -157,6 +157,8 @@ float Font::Width(const std::string& s, float scale) const {
 }
 
 void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, const std::string& s) const {
+    Texture t = tex;
+    t.pixel = r.pixelFonts(); // Smooth Fonts off
     for (size_t i = 0; i < s.size();) {
         auto it = glyphs.find(NextCodePoint(s, &i));
         if (it == glyphs.end()) continue;
@@ -169,7 +171,7 @@ void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, cons
         const float e = 0.0f;
         float u0 = (g.x + e) / tex.w, u1 = (g.x + g.w - e) / tex.w;
         float v1 = (g.y + e) / tex.h, v0 = (g.y + g.h - e) / tex.h; // texture is bottom-up
-        r.Rect(tex, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);
+        r.Rect(t, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);
         x += g.advance * scale;
     }
 }

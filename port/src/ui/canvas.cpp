@@ -493,7 +493,19 @@ CRect Canvas::ScreenRect(const Ui& ui, int i) const {
 // ---------------------------------------------------------------------------------------------
 void Canvas::Draw(Ui& ui, int root, const Loc& loc) {
     if (root < 0) return;
+    // the pages' open animation (MenuPage's Animator "Show": the page area pops in)
+    std::vector<std::pair<int, float>> popped;
+    if (appear < 1)
+        for (int i = 0; i < size(); i++)
+            if (node(i).name == "PageArea") {
+                CNode& n = node(i);
+                popped.emplace_back(i, n.scale[0]);
+                float t = std::clamp(appear, 0.0f, 1.0f), k = 1.70158f;
+                float back = 1 + (k + 1) * (t - 1) * (t - 1) * (t - 1) + k * (t - 1) * (t - 1); // easeOutBack
+                n.scale[0] = n.scale[1] = n.scale[0] * (0.85f + 0.15f * back);
+            }
     Layout(ui, root, loc);
+    for (auto [i, s] : popped) node(i).scale[0] = node(i).scale[1] = s;
     // Selectable.DoStateTransition (ColorTint): selected while the button's outline shows
     for (CNode& n : nodes_) n.tint = 0xffffffffu;
     for (int i = 0; i < size(); i++) {
@@ -509,6 +521,7 @@ void Canvas::Draw(Ui& ui, int root, const Loc& loc) {
 void Canvas::DrawNode(int i, float alpha) {
     CNode& n = node(i);
     if (!n.active) return;
+    if (appear < 1 && n.name == "PageArea") alpha *= std::clamp(appear * 1.5f, 0.0f, 1.0f);
     if (n.hasImage && n.imageOn && (!n.mask || n.showMaskGraphic)) DrawImage(n, alpha);
     if (n.hasText && n.textOn) DrawText(n, alpha);
     if (n.mask) {

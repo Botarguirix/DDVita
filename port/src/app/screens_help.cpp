@@ -121,6 +121,7 @@ void App::DrawInfoPopup() {
     uint32_t headerCol = col::Rgb(115, 41, 48);
     auto popup = [&](const char* field, const char* fb) { return T(help_.Popup("EnemyInfoPopup", field, ""), fb); };
     if (tile->occupant && tile->occupant->entityType == EntityType::Enemy) {
+        if (!settings_.enemyPopups) return; // EnemyInfoPopup.blockPopup
         const Enemy* e = static_cast<const Enemy*>(tile->occupant);
         header = e->Name();
         char buf[64];
@@ -162,6 +163,7 @@ void App::DrawInfoPopup() {
                            col::Yellow);
     } else {
         // TileInfoConfig: what else the tile holds
+        if (!settings_.tilePopups) return; // TileInfoPopup
         const char* key = tile->containsBall() ? "Ball"
                           : tile->containsGem() ? (run_->IsHalloween() ? "Gem_HalloweenEvent" : "Gem")
                           : tile->occupant && tile->occupant->entityType == EntityType::Obstacle ? "Wall"

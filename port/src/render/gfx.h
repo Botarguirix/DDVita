@@ -3,6 +3,7 @@
 // The 3D scene is drawn at the Flashback94 post-process resolution (640x360, point sampled, as the
 // gameplay camera's Flashback94_PostProcess is configured) and then scaled to the output.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -62,6 +63,15 @@ public:
     int lowH() const { return lowH_; }
     // menus scaled by a fraction (1.5 on the Vita) are drawn bilinear instead of with uneven pixels
     void SetSmooth2D(bool on) { smooth2D_ = on; }
+    // the 3D frame's resolution (at most the output's; the frame texture is made that big)
+    void SetLowRes(int w, int h) {
+        lowW_ = std::min(w, frameMaxW_);
+        lowH_ = std::min(h, frameMaxH_);
+    }
+    void SetPixelFonts(bool on) { pixelFonts_ = on; }
+    bool pixelFonts() const { return pixelFonts_; }
+    bool pixelFonts_ = false;
+    int frameMaxW_ = 640, frameMaxH_ = 360;
     bool smooth2D_ = false;
 
 private:

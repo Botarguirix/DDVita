@@ -137,6 +137,9 @@ void App::DrawConfirm(const std::string& header, const std::string& body, const 
 // Frame
 // ---------------------------------------------------------------------------------------------
 void App::Draw() {
+    // the menu pages pop in over a fifth of a second after each change of screen
+    float appear = std::min(1.0f, timer_ / 0.2f);
+    titleUi_.appear = gameUi_.appear = optionsUi_.appear = appear;
     bool stageBehind = st_.view && screen_ != Screen::Title && screen_ != Screen::Modes && screen_ != Screen::Teams && screen_ != Screen::NewGame &&
                        screen_ != Screen::Achievements && screen_ != Screen::Unlocks && screen_ != Screen::Intro &&
                        screen_ != Screen::TrialIntro && screen_ != Screen::Credits &&
@@ -312,7 +315,10 @@ void App::DrawHud() {
                 case ActorAction::Player_TakeBall: what = T("Gameplay/Action_Take", "Take"); break;
                 default: what = c.actionConfig->switchControl ? T("Gameplay/Action_SwitchPlayer", "Switch Player") : ""; break;
                 }
-                if (c.staminaCost) what += "  " + T("Gameplay/Stamina", "Stamina") + " " + std::to_string(c.staminaCost);
+                if (!settings_.actionPopups) what.clear(); // HelpPopup
+                if (c.staminaCost && settings_.commandCostPopups) // CommandTooltip
+                    what += (what.empty() ? "" : "  ") + T("Gameplay/Stamina", "Stamina") + " " + std::to_string(c.staminaCost);
+                if (what.empty()) continue;
                 float y = H - ui_.LineHeight(ui::Small) - 30;
                 float x = ui_.Prompt(8, y, ButtonLabel(Input::Confirm), platform::ButtonSprite(Input::Confirm)) + 10;
                 ui_.Text(ui::Small, x, y, c.interactable && !c.tooExpensive ? col::White : col::Grey, what);

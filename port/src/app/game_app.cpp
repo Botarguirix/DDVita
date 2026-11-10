@@ -100,6 +100,7 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     optionsUi_.Load(dataDir + "/render/ui_options.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
+    ApplyVisualSettings();
     sound_.SetCrowdSetting(settings_.crowd);
     hasSave_ = RecordExists(savePath_);
 }
@@ -742,12 +743,22 @@ float* App::Volume(int row) {
     return row >= 0 && row < 6 ? v[row] : nullptr;
 }
 
+void App::ApplyVisualSettings() {
+    // Pixel Filter: the original's 640x360 (Flashback94); off: the screen's own resolution, 16:9
+    int w = r_.outW(), h = w * 9 / 16;
+    if (h > r_.outH()) h = r_.outH(), w = h * 16 / 9;
+    if (settings_.pixelFilter || w <= 640) r_.SetLowRes(640, 360);
+    else r_.SetLowRes(w, h);
+    r_.SetPixelFonts(!settings_.smoothFonts);
+}
+
 void App::InputOptions(Input in) {
     if (Nav(in, &sel_, OptionRows())) sound_.PlayCue("MenuMove");
     if (in == Input::Menu || IsBack(in)) { // mooPreviousPage
         sound_.PlayCue("MenuCancel");
         if (optionsPage_ != 0) {
-            sel_ = optionsPage_ == 1 ? 0 : 1;
+            sel_ = optionsPage_ == 1 ? 0 : optionsPage_ == 3 ? 1 : 2;
+            timer_ = 0;
             optionsPage_ = 0;
             return;
         }
@@ -760,24 +771,29 @@ void App::InputOptions(Input in) {
     case 0:
         if (in != Input::Confirm) return;
         sound_.PlayCue("MenuSubmit");
-        if (sel_ == 2) { // mooDeathballRestoreDefaultSettings
+        if (sel_ == 3) { // mooDeathballRestoreDefaultSettings
             settings_ = Settings{};
             settings_.Apply(mixer_);
             sound_.SetCrowdSetting(settings_.crowd);
             if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
+            ApplyVisualSettings();
         } else {
-            optionsPage_ = sel_ == 0 ? 1 : 2;
+            optionsPage_ = sel_ == 0 ? 1 : sel_ == 1 ? 3 : 2;
+            timer_ = 0;
             sel_ = 0;
         }
         return;
     case 1:
+    case 3: {
         if (in != Input::Confirm && in != Input::Left && in != Input::Right) return;
-        if (sel_ == 0) settings_.autoSkipCinematics = !settings_.autoSkipCinematics;
-        else if (sel_ == 1) settings_.suggestUndo = !settings_.suggestUndo;
-        else settings_.healthBars = !settings_.healthBars;
-        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
+        std::vector<ToggleRow> rows = ToggleRows();
+        if (sel_ < 0 || sel_ >= static_cast<int>(rows.size())) return;
+        *rows[static_cast<size_t>(sel_)].value = !*rows[static_cast<size_t>(sel_)].value;
+        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo, st_.game->fastMode = settings_.fastMode;
+        ApplyVisualSettings();
         sound_.PlayCue("MenuSubmit");
         return;
+    }
     default:
         if (in != Input::Left && in != Input::Right) return;
         if (float* v = Volume(sel_)) {
@@ -1179,7 +1195,9 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
     // the stage keeps playing under the pause menu only while an action finishes
     if (st_.view && (screen_ == Screen::Play || (st_.started && st_.view->Busy()))) {
         sound_.Update(dt);
-        st_.view->Update(dt);
+        st_.view->dynamicCamera = settings_.dynamicCamera;
+        st_.view->greyBlood = settings_.greyBlood;
+        st_.view->Update(settings_.fastMode ? dt * 1.75f : dt); // Fast Mode: TimingConfig.skipDelaysForFastMode
         if (screen_ == Screen::Play && !st_.view->Busy() && st_.game->phase() == Phase::StageEnded) StageOver();
     } else {
         sound_.Update(dt);
@@ -1252,10 +1270,7 @@ int RunGame(int argc, char** argv) {
         return 1;
     }
     Renderer r;
-    // the 3D frame at the screen's own resolution where the Flashback94 640x360 would be stretched by
-    // an uneven 1.5 (the Vita): sharper than the original's point-sampled low res
-    if (ww >= 960 && ww < 1280) r.Init(ww, wh, 960, 540);
-    else r.Init(ww, wh);
+    r.Init(ww, wh); // the 3D frame's resolution: App::ApplyVisualSettings (Pixel Filter)
 
     // missing or outdated data: say what to do (a message box, except in automated runs) and quit
     bool testing = !shotPath.empty() || !script.empty() || autoPlay;

@@ -36,7 +36,12 @@ struct Settings {
     float master = 0.7f, music = 0.7f, jingles = 0.7f, sounds = 0.7f, voices = 1.0f, crowd = 1.0f;
     bool suggestUndo = true;
     bool autoSkipCinematics = false;
-    bool healthBars = true; // the port's: a HealthBar_WithActOrder over every actor // AppSettingsDeathball.pref_autoSkipCinematics
+    bool healthBars = true; // the port's: a HealthBar_WithActOrder over every actor
+    bool fastMode = false, dynamicCamera = true, greyBlood = false;
+    bool actionPopups = true, commandCostPopups = true, menuPopups = true, enemyPopups = true, tilePopups = true;
+    // Graphics: the original's pixel filter is its 640x360 frame; off here (the screen's own resolution)
+    // as the Vita stretches it by an uneven 1.5. Smooth fonts: on for the same reason.
+    bool pixelFilter = false, smoothFonts = true; // AppSettingsDeathball.pref_autoSkipCinematics
     bool Load(const std::string& path);
     bool Save(const std::string& path) const;
     void Apply(audio::Mixer& mixer) const;
@@ -261,7 +266,15 @@ public:
 
     static constexpr int kAchievementCols = 14; // AchievementGrid's GridLayoutGroup constraint
     int optionsPage_ = 0; // 0 main, 1 gameplay, 2 sound
-    int OptionRows() const;
+    int OptionRows();
+    struct ToggleRow {
+        const char* node;
+        const char* key;
+        const char* fb;
+        bool* value;
+    };
+    std::vector<ToggleRow> ToggleRows();
+    void ApplyVisualSettings(); // pixel filter, fonts
     bool DrawOptionsCanvas();
     void StartIntro(bool force = false); // the boot cutscene, unless cinematics are skipped
     static constexpr int kMusicPopup = 100;

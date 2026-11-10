@@ -29,12 +29,25 @@ bool Settings::Load(const std::string& path) {
     flag("suggestUndo", &suggestUndo);
     flag("autoSkipCinematics", &autoSkipCinematics);
     flag("healthBars", &healthBars);
+    flag("fastMode", &fastMode);
+    flag("dynamicCamera", &dynamicCamera);
+    flag("greyBlood", &greyBlood);
+    flag("actionPopups", &actionPopups);
+    flag("commandCostPopups", &commandCostPopups);
+    flag("menuPopups", &menuPopups);
+    flag("enemyPopups", &enemyPopups);
+    flag("tilePopups", &tilePopups);
+    flag("pixelFilter", &pixelFilter);
+    flag("smoothFonts", &smoothFonts);
     return true;
 }
 
 bool Settings::Save(const std::string& path) const {
     json j = {{"master", master}, {"music", music}, {"jingles", jingles}, {"sounds", sounds}, {"voices", voices}, {"crowd", crowd}, {"suggestUndo", suggestUndo},
-              {"autoSkipCinematics", autoSkipCinematics}, {"healthBars", healthBars}};
+              {"autoSkipCinematics", autoSkipCinematics}, {"healthBars", healthBars},
+              {"fastMode", fastMode}, {"dynamicCamera", dynamicCamera}, {"greyBlood", greyBlood}, {"actionPopups", actionPopups},
+              {"commandCostPopups", commandCostPopups}, {"menuPopups", menuPopups}, {"enemyPopups", enemyPopups}, {"tilePopups", tilePopups},
+              {"pixelFilter", pixelFilter}, {"smoothFonts", smoothFonts}};
     std::ofstream f(path, std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f << j.dump(1);

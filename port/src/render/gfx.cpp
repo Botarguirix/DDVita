@@ -41,9 +41,12 @@ bool Renderer::Init(int outW, int outH, int lowW, int lowH) {
     outH_ = outH;
     lowW_ = lowW;
     lowH_ = lowH;
+    // big enough for the output's own resolution too (Pixel Filter off)
+    frameMaxW_ = std::max(lowW, std::min(outW, 2048));
+    frameMaxH_ = std::max(lowH, std::min(outH, 2048));
     Image frame;
-    frame.w = NextPow2(lowW);
-    frame.h = NextPow2(lowH);
+    frame.w = NextPow2(frameMaxW_);
+    frame.h = NextPow2(frameMaxH_);
     frame.rgba.assign(static_cast<size_t>(frame.w) * frame.h * 4, 0);
     frame_ = Upload(frame, false);
     Image white;

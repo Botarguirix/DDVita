@@ -31,6 +31,8 @@ public:
     ~StageView();
 
     void Update(float dt);
+    // Options: CameraController's dynamic cameras; SetBloodColour* (grey blood)
+    bool dynamicCamera = true, greyBlood = false;
     bool Busy() const { return wait_ > 0 || !queue_.empty() || consumed_ < game_.events.size(); }
     // cursor: tile highlighted by the player's selection (nullptr = none)
     void Draw(const sim::V2* cursor, const std::vector<sim::Command>& commands);
@@ -73,6 +75,15 @@ private:
     Camera cam_;
     Vec3 camTarget_;
     bool camInit_ = false;
+    // the dynamic cameras (attack / ball / charge / spawn cams): a closer shot of `focus_` while
+    // focusHold_ lasts, blended in and out; introT_: the intro cams (the exit door, then the field)
+    Vec3 focus_;
+    float focusW_ = 0, focusHold_ = 0, introT_ = 0;
+    void FocusOn(Vec3 p, float hold) {
+        if (!dynamicCamera) return;
+        focus_ = focusHold_ > 0 ? Lerp(focus_, p, 0.5f) : p;
+        focusHold_ = std::max(focusHold_, hold);
+    }
     float time_ = 0;
     float wait_ = 0;
     size_t consumed_ = 0;

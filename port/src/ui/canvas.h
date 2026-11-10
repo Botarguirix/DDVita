@@ -78,6 +78,7 @@ class Canvas {
 public:
     bool Load(const std::string& path);
     bool loaded() const { return !nodes_.empty(); }
+    float appear = 1; // < 1: the pages' PageArea pops in (0..1 over the open animation)
 
     // "Canvas_TitleScreen/MenuPages/MenuPage_MainMenu" (from a root) or relative to `from`; -1 if none
     int Find(const std::string& path, int from = -1) const;
