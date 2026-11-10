@@ -74,4 +74,28 @@ bool App::DrawSkullKeysCanvas() {
     return true;
 }
 
+// Canvas_ScreenTransition (the Slam style): DUNGEON and DEATHBALL meet in the middle on a change of
+// scene; the new scene opens behind them
+void App::DrawTransition() {
+    float t = static_cast<float>(clock - transAt_);
+    ui::Canvas& c = transitionUi_;
+    int root = c.Find("Canvas_ScreenTransition");
+    if (t >= 0.6f || root < 0) return;
+    int black = c.Find("Blackout", root), top = c.Find("Top", black), bottom = c.Find("Bottom", black);
+    c.SetActive(black, true);
+    c.SetActive(c.Find("Fade", root), false);
+    float k = std::clamp((t - 0.15f) / 0.45f, 0.0f, 1.0f);
+    k = k * k * k; // eases out of the hold, then away
+    float half = ui_.H() * 0.5f + 40;
+    for (int half2 : {top, bottom}) { // the logo's words (the Text's big font is not in the export)
+        c.SetActive(c.Find("Text", half2), false);
+        int logo = c.Find("Logo", half2);
+        c.SetActive(logo, true);
+        c.node(logo).scale[0] = c.node(logo).scale[1] = 3;
+    }
+    c.node(top).pos[1] = k * half;
+    c.node(bottom).pos[1] = -k * half;
+    c.Draw(ui_, root, loc_);
+}
+
 } // namespace dd::app

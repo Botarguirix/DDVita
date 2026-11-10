@@ -98,6 +98,9 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     gameUi_.Load(dataDir + "/render/ui_game.json");
     prefabUi_.Load(dataDir + "/render/ui_prefabs.json");
     endingUi_.Load(dataDir + "/render/ui_ending.json");
+    transitionUi_.Load(dataDir + "/render/ui_transition.json");
+    introUi_.Load(dataDir + "/render/ui_intro.json");
+    trialIntroUi_.Load(dataDir + "/render/ui_trialintro.json");
     optionsUi_.Load(dataDir + "/render/ui_options.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
@@ -109,8 +112,27 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
 // ---------------------------------------------------------------------------------------------
 // Flow
 // ---------------------------------------------------------------------------------------------
+namespace {
+// the Unity scene a screen belongs to (a change of scene slams the ScreenTransition shut and open)
+int SceneOf(Screen s, Screen helpReturn, Screen optionsReturn) {
+    switch (s) {
+    case Screen::Title: case Screen::Modes: case Screen::NewGame: case Screen::Teams: case Screen::Achievements:
+    case Screen::Unlocks: case Screen::Credits: return 0;
+    case Screen::HowToPlay: return helpReturn == Screen::Title ? 0 : 1;
+    case Screen::Options: return optionsReturn == Screen::Title ? 0 : 1;
+    case Screen::Intro: return 2;
+    case Screen::TrialIntro: return 3;
+    case Screen::Ending: return 4;
+    default: return 1;
+    }
+}
+} // namespace
+
 void App::Go(Screen s, int sel) {
     if (testing && s != screen_) std::printf("screen %d at %.1f s\n", static_cast<int>(s), static_cast<double>(clock));
+    // a new scene, or the gameplay scene loaded again for the next stage
+    if (SceneOf(s, helpReturn_, optionsReturn_) != SceneOf(screen_, helpReturn_, optionsReturn_) || (s == Screen::StageStart && screen_ != Screen::StageStart))
+        transAt_ = clock;
     screen_ = s;
     sel_ = sel;
     sel2_ = 0;

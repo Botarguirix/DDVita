@@ -224,6 +224,7 @@ void App::Draw() {
         break;
     }
     DrawToast();
+    DrawTransition();
     DrawDebug();
 }
 
@@ -954,6 +955,18 @@ void App::DrawIntro() {
     // the line, typed out (UTF-8 safe: cut at a character boundary)
     std::string shown = full.substr(0, std::min(chars, full.size()));
     while (!shown.empty() && (static_cast<unsigned char>(shown.back()) & 0xc0) == 0x80) shown.pop_back();
+    // Canvas_Intro's Subtitles strip, the line's Text_L_CutsceneDialogue (TypewriterAutoplay)
+    if (int root = introUi_.loaded() ? introUi_.Find("Canvas_Intro") : -1; root >= 0) {
+        int subs = introUi_.Find("Subtitles", root);
+        for (int k : introUi_.node(subs).kids) {
+            const std::string& n = introUi_.node(k).name;
+            bool on = n == "Text_L_CutsceneDialogue (" + std::to_string(line + 1) + ")";
+            introUi_.SetActive(k, on);
+            if (on) introUi_.SetText(k, shown);
+        }
+        introUi_.Draw(ui_, root, loc_);
+        shown.clear();
+    }
     float ty = H * 0.78f;
     for (const std::string& l : ui_.Wrap(ui::Medium, shown, W - 80)) {
         ui_.Text(ui::Medium, W * 0.5f, ty, col::White, l, Align::Center);
@@ -978,6 +991,15 @@ void App::DrawTrialIntro() {
         const TrialData* td = run_->currentTrial < static_cast<int>(data_.session.trials.size())
                                   ? &data_.session.trials[static_cast<size_t>(run_->currentTrial)] : nullptr;
         float shake = timer_ - revealAt < 0.3f ? std::sin(timer_ * 90.0f) * 3.0f : 0.0f; // CameraShake
+        // the LeagueIntro scene's Canvas: the Header strip with the trial number
+        if (int root = trialIntroUi_.loaded() ? trialIntroUi_.Find("Canvas") : -1; root >= 0) {
+            ui::Canvas& c = trialIntroUi_;
+            int header = c.Find("TrialIntro/Header", root);
+            c.SetText(c.Find("Text/Text_L (Trials)", header),
+                      ui::Format(T("Gameplay/TrialCount", "Trial {0.value} of {1.maxValue}"), {{"value", ui::Int(run_->currentTrial + 1)}, {"maxValue", "4"}}));
+            c.node(header).pos[0] = shake;
+            c.Draw(ui_, root, loc_);
+        } else
         ui_.Text(ui::Large, W * 0.5f + shake, 30, col::Yellow,
                  ui::Format(T("Gameplay/TrialCount", "Trial {0.value} of {1.maxValue}"), {{"value", ui::Int(run_->currentTrial + 1)}, {"maxValue", "4"}}),
                  Align::Center);

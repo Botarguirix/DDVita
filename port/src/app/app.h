@@ -295,7 +295,9 @@ private:
     ui::Loc loc_;
     Help help_;
     // the original's menus (render/ui_title.json, ui_game.json: the scenes' Canvas trees)
-    ui::Canvas titleUi_, gameUi_, prefabUi_, optionsUi_, endingUi_; // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
+    ui::Canvas titleUi_, gameUi_, prefabUi_, optionsUi_, endingUi_, transitionUi_, introUi_, trialIntroUi_;
+    double transAt_ = -100; // ScreenTransition (Slam): when the last change of scene happened
+    void DrawTransition(); // prefabUi_: the gameplay UI prefabs (PlayerInfoPanel...)
     int hudMark_ = -1;                        // gameUi_'s own nodes; the HUD's instances follow
     std::vector<uint32_t> phaseColors_;
     bool DrawHudCanvas();
