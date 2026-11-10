@@ -716,6 +716,7 @@ void Game::CalculateStageScore() {
         scoreTreasure = RoundToInt(static_cast<float>(treasure) * team->traitMultiplyScoreBonusTreasure());
     }
     int before = scoreComplete + scoreTouchdown + scoreWithinPar + scoreParBonus + scoreTreasure;
+    scoreParts_ = StageScoreParts{scoreComplete, scoreTouchdown, scoreWithinPar, scoreParBonus, scoreTreasure, gemCount};
     // Score.GetBallModMultiplier(currentEffect, 1)
     float ballMult = 1.0f;
     if (run.ballEffect == DifficultyEffect::Easier)

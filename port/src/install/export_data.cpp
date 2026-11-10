@@ -416,6 +416,7 @@ bool ExportUi(const GameFiles& g, const Extracted& ex, const std::string& sceneF
             }
             json k = {{"t", cls}, {"on", v.value("m_Enabled", 1) != 0}};
             if (cls == "Image" || cls == "RawImage") {
+                k["id"] = cid;
                 k["sprite"] = assetName(v.value("m_Sprite", json()));
                 k["color"] = Rgba(v["m_Color"]);
                 for (const char* key : {"m_Type", "m_FillMethod", "m_FillOrigin", "m_FillCenter", "m_FillClockwise", "m_PreserveAspect"})
@@ -448,6 +449,14 @@ bool ExportUi(const GameFiles& g, const Extracted& ex, const std::string& sceneF
                                             "m_ChildForceExpandHeight", "m_ChildScaleWidth", "m_ChildScaleHeight", "m_ReverseArrangement"})
                         k[key + 2] = v.value(key, 0);
                 }
+            } else if (cls == "Button") { // Selectable: its colour tint and the graphic it tints
+                const json& cb = v["m_Colors"];
+                k["transition"] = v.value("m_Transition", 1);
+                k["normal"] = Rgba(cb["m_NormalColor"]);
+                k["selected"] = Rgba(cb["m_SelectedColor"]);
+                k["disabled"] = Rgba(cb["m_DisabledColor"]);
+                k["mult"] = cb.value("m_ColorMultiplier", 1.0);
+                k["target"] = v["m_TargetGraphic"].value("m_PathID", int64_t(0));
             } else if (cls == "LayoutElement") {
                 for (const char* key : {"m_MinWidth", "m_MinHeight", "m_PreferredWidth", "m_PreferredHeight", "m_FlexibleWidth", "m_FlexibleHeight"})
                     k[key + 2] = v.value(key, -1.0);

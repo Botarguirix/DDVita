@@ -293,6 +293,18 @@ private:
     Screen optionsReturn_ = Screen::Title, helpReturn_ = Screen::Title;
     bool defeat_ = false;
     int stageGold_ = 0, revealed_ = 0;
+    static constexpr int kResultSteps = 12; // the results screen's appearance steps
+    bool DrawResultsCanvas();
+    bool DrawManageCanvas();
+    bool DrawKeepGoingCanvas();
+    bool DrawOverwriteCanvas();
+    bool DrawPauseCanvas();
+    bool DrawPauseConfirmCanvas();
+    void DrawBlackFade();
+    bool DrawFlashCanvas();
+    bool DrawDefeatCanvas();
+    int GameplayMenuPage(const char* page);
+    void DrawGameplayMenu();
     std::string flashText_;
     bool showInfo_ = false, showLog_ = false, showPerf_ = false;
     int metaTab_ = 0;

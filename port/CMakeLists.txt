@@ -92,6 +92,11 @@ add_library(ddgamelib STATIC
     src/app/screens_meta.cpp
     src/app/screens_hud.cpp
     src/app/screens_stagestart.cpp
+    src/app/screens_results.cpp
+    src/app/screens_manage.cpp
+    src/app/screens_keepgoing.cpp
+    src/app/screens_pause.cpp
+    src/app/screens_stageend.cpp
     src/app/settings.cpp
     src/app/save.cpp
     src/ui/text.cpp

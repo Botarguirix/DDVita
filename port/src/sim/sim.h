@@ -160,6 +160,12 @@ public:
     void LevelUpPlayerStat(PlayerStat s);
 };
 
+// StageScore's parts of the last stage's score (the results screen shows each)
+struct StageScoreParts {
+    int complete = 0, touchdown = 0, withinPar = 0, parBonus = 0, treasure = 0;
+    int gemTarget = 0; // StageScore.GetGemRankTarget
+};
+
 struct StageResults {
     bool complete = false, touchdown = false;
     int parDifference = 0;
@@ -715,6 +721,7 @@ public:
     bool gameEndedInDefeat = false;
     const StageResults& results() const { return results_; }
     int goldEarned() const { return goldEarned_; }
+    const StageScoreParts& scoreParts() const { return scoreParts_; }
 
     // ---- input ----
     std::vector<Command> GetCommands();          // tile commands + buttons for the current player
@@ -802,6 +809,7 @@ private:
     Command command_; // PlayerCommand.command
     StageResults results_;
     int goldEarned_ = 0;
+    StageScoreParts scoreParts_;
     const BallModifierConfig* modifier_ = nullptr;
     bool awaitingUndo_ = false;          // GameController.SuggestUndo is waiting for an answer
     std::vector<Player*> allPlayers_;    // every Player spawned this stage (UndoPlayer subscribers)

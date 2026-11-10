@@ -27,7 +27,7 @@ struct CNode {
     // ---- Image ----
     bool hasImage = false, imageOn = true;
     std::string sprite;
-    uint32_t imageColor = 0xffffffffu;
+    uint32_t imageColor = 0xffffffffu, baseImageColor = 0xffffffffu; // current / as authored
     int imageType = 0; // Simple, Sliced, Tiled, Filled
     int fillMethod = 0, fillOrigin = 0;
     float fillAmount = 1, ppum = 1;
@@ -60,6 +60,10 @@ struct CNode {
     bool mask = false, showMaskGraphic = true;
 
     std::vector<std::string> scripts; // every MonoBehaviour's class (MenuPage, MenuObject...)
+    // Button with a ColorTint transition: the Image it tints and the colours (normal / selected,
+    // selected while its SelectedOutline child shows); `tint` is what the Image is multiplied by
+    int tintTarget = -1;
+    uint32_t tintNormal = 0xffffffffu, tintSelected = 0xffffffffu, tint = 0xffffffffu;
     // a sprite made at run time (the procedural player portraits) in place of `sprite`
     const gfx::Texture* rtTex = nullptr;
     gfx::SpriteDef rtDef;

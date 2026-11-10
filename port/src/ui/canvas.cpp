@@ -45,6 +45,8 @@ bool Canvas::Load(const std::string& path) {
     json j = json::parse(f, nullptr, false);
     if (!j.is_object() || !j.contains("nodes")) return false;
     nodes_.clear();
+    std::unordered_map<int64_t, int> imageIds;               // Image component path id -> node
+    std::vector<std::pair<int, int64_t>> tints;               // button node -> its target's path id
     for (const json& n : j["nodes"]) {
         CNode c;
         c.name = S(n, "n");
@@ -64,8 +66,9 @@ bool Canvas::Load(const std::string& path) {
             if (t == "Image") {
                 c.hasImage = true;
                 c.imageOn = on;
+                if (k.contains("id")) imageIds[k["id"].get<int64_t>()] = static_cast<int>(nodes_.size());
                 c.sprite = S(k, "sprite");
-                c.imageColor = Color(k.value("color", json()));
+                c.imageColor = c.baseImageColor = Color(k.value("color", json()));
                 c.imageType = I(k, "Type");
                 c.fillMethod = I(k, "FillMethod");
                 c.fillOrigin = I(k, "FillOrigin");
@@ -127,11 +130,19 @@ bool Canvas::Load(const std::string& path) {
             } else if (t == "Mask" && on) {
                 c.mask = true;
                 c.showMaskGraphic = I(k, "show", 1) != 0;
+            } else if (t == "Button" && I(k, "transition") == 1 && k.contains("target")) {
+                c.tintNormal = Color(k.value("normal", json()));
+                c.tintSelected = Color(k.value("selected", json()));
+                tints.emplace_back(static_cast<int>(nodes_.size()), k["target"].get<int64_t>());
             } else if (t == "LocalizeStringEvent") {
                 c.locKey = S(k, "key");
             }
         }
         nodes_.push_back(std::move(c));
+    }
+    for (const auto& [button, id] : tints) {
+        auto it = imageIds.find(id);
+        if (it != imageIds.end()) node(button).tintTarget = it->second;
     }
     return !nodes_.empty();
 }
@@ -193,6 +204,7 @@ int Canvas::Instantiate(const Canvas& src, int srcRoot, int parent) {
         CNode c = src.node(i);
         c.parent = i == srcRoot ? parent : map[c.parent];
         for (int& k : c.kids) k = map[k];
+        if (c.tintTarget >= 0) c.tintTarget = map.count(c.tintTarget) ? map[c.tintTarget] : -1;
         nodes_.push_back(std::move(c));
     }
     if (parent >= 0) node(parent).kids.push_back(base);
@@ -482,6 +494,14 @@ CRect Canvas::ScreenRect(const Ui& ui, int i) const {
 void Canvas::Draw(Ui& ui, int root, const Loc& loc) {
     if (root < 0) return;
     Layout(ui, root, loc);
+    // Selectable.DoStateTransition (ColorTint): selected while the button's outline shows
+    for (CNode& n : nodes_) n.tint = 0xffffffffu;
+    for (int i = 0; i < size(); i++) {
+        const CNode& b = node(i);
+        if (b.tintTarget < 0) continue;
+        int outline = FindDeep("SelectedOutline", i);
+        node(b.tintTarget).tint = outline >= 0 && node(outline).active ? b.tintSelected : b.tintNormal;
+    }
     DrawNode(root, 1);
     ui.Clip(0, 0, 0, 0);
 }
@@ -561,7 +581,12 @@ void Canvas::DrawImage(const CNode& n, float alpha) {
         }
         ui_->Quad(tex, qx + dx, qy + dy, qw, qh, u0 / tw, v1 / th, u1 / tw, v0 / th, color);
     };
-    uint32_t color = WithAlpha(n.imageColor, alpha);
+    auto mul = [](uint32_t a, uint32_t b) {
+        uint32_t r = 0;
+        for (int s = 0; s < 32; s += 8) r |= ((((a >> s) & 255) * ((b >> s) & 255) + 127) / 255) << s;
+        return r;
+    };
+    uint32_t color = WithAlpha(mul(n.imageColor, n.tint), alpha);
     if (n.hasShadow) {
         uint32_t sc = WithAlpha(n.shadowColor, ((n.imageColor >> 24) & 255) / 255.0f * alpha);
         float sx = n.shadowDist[0], sy = -n.shadowDist[1];

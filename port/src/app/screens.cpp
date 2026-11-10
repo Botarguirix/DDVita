@@ -158,7 +158,9 @@ void App::Draw() {
     case Screen::Pause: DrawHud(); DrawPause(); break;
     case Screen::PauseConfirm:
         DrawHud();
-        if (sel2_ == 0)
+        if (gameUi_.loaded() && DrawPauseConfirmCanvas()) {
+            Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("Gameplay/Pause_QuitConfirm_Stay", "Stay")}});
+        } else if (sel2_ == 0)
             DrawConfirm(T("General/Quit_Q", "Quit?"), T("Gameplay/Pause_QuitConfirm_Desc", "If you quit you will lose all progress in this run."),
                         {T("General/Quit", "Quit"), T("Gameplay/Pause_QuitConfirm_Stay", "Stay")}, sel_);
         else
@@ -214,7 +216,11 @@ void App::DrawHud() {
     Run& run = *run_;
     const float W = ui_.W(), H = ui_.H();
     // (the stage start panel has the screen to itself: GameplayUI shows once the stage is played)
-    bool canvas = screen_ == Screen::StageStart ? gameUi_.loaded() : screen_ == Screen::Play && DrawHudCanvas();
+    // the stage end: StageEndUI's own canvas over the field, no HUD
+    if ((screen_ == Screen::Flash || screen_ == Screen::Defeat) && gameUi_.loaded()) return;
+    bool menus = screen_ == Screen::Pause || screen_ == Screen::PauseConfirm || screen_ == Screen::Options;
+    bool canvas = screen_ == Screen::StageStart ? gameUi_.loaded() : (screen_ == Screen::Play || (menus && st_.started)) && DrawHudCanvas();
+    if (canvas && menus) return;
     if (!canvas) {
     // top bar: stage, turn / par, gold
     ui_.Fill(0, 0, W, 22, PackColor(0, 0, 0, 0.55f));
@@ -381,15 +387,17 @@ void App::DrawStageStart() {
 }
 
 void App::DrawPause() {
+    if (gameUi_.loaded() && DrawPauseCanvas())
+        return Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/Resume", "Resume")}});
     ui_.Shade(0.5f);
     const float W = ui_.W(), H = ui_.H();
     float w = 240, h = 5 * 28 + 50, x = std::floor((W - w) * 0.5f), y = std::floor((H - h) * 0.5f);
     ui_.Panel(x, y, w, h);
     ui_.Text(ui::Large, W * 0.5f, y + 8, col::White, T("Gameplay/Paused", "Paused"), Align::Center);
-    std::string items[5] = {T("General/Resume", "Resume"), T("Gameplay/Pause_RestartStage", "Restart Stage"), T("General/Options", "Options"),
-                            T("FrontEnd/HowToPlay", "How to Play"), T("General/Quit", "Quit")};
-    for (int i = 0; i < 5; i++) {
-        bool enabled = i != 1 || (RestartAllowed() && st_.started);
+    std::string items[4] = {T("General/Resume", "Resume"), T("General/Options", "Options"), T("Gameplay/Pause_RestartStage", "Restart Stage"),
+                            T("General/Quit", "Quit")};
+    for (int i = 0; i < 4; i++) {
+        bool enabled = i != 2 || (RestartAllowed() && st_.started);
         ui_.Button(x + 20, y + 44 + i * 28, w - 40, 24, items[i], sel_ == i, enabled);
     }
     Hints(ui_, {{Input::Confirm, T("Gameplay/Command_Confirm", "Confirm")}, {Input::Back, T("General/Resume", "Resume")}});
@@ -426,12 +434,14 @@ void App::DrawOptions() {
 }
 
 void App::DrawDefeat() {
+    if (gameUi_.loaded() && DrawDefeatCanvas()) return Hints(ui_, {{Input::Confirm, T("General/MenuNav_Select", "Select")}});
     DrawConfirm(T("Gameplay/Defeat_YouLose", "You Lose"), T("Gameplay/StageEnd_Defeat_RestartInfo", "You can restart each stage once in this mode."),
                 {T("Gameplay/Pause_RestartStage", "Restart Stage"), T("Gameplay/StageEnd_Defeat_GiveUp", "Give Up")}, sel_);
 }
 
 // StageEndUI: "Touchdown!" / "Made It!" / "You Lose" over the field
 void App::DrawFlash() {
+    if (gameUi_.loaded() && DrawFlashCanvas()) return;
     const float W = ui_.W(), H = ui_.H();
     float k = std::min(1.0f, timer_ / 0.25f);
     ui_.Fill(0, H * 0.38f, W, 54 * k, PackColor(0, 0, 0, 0.6f));
@@ -441,6 +451,11 @@ void App::DrawFlash() {
 // StageResultsScreen: the stage's goals one row at a time, then the rank
 void App::DrawResults() {
     if (st_.view) DrawStage(), ui_.Begin();
+    if (gameUi_.loaded()) DrawBlackFade();
+    if (gameUi_.loaded() && DrawResultsCanvas()) {
+        Hints(ui_, {{Input::Confirm, T("General/MenuNav_Continue", "Continue")}});
+        return;
+    }
     ui_.Shade(0.55f);
     Game& g = *st_.game;
     Run& run = *run_;
@@ -477,12 +492,12 @@ void App::DrawResults() {
         {T("Gameplay/Results_StageGold", "Stage Gold"), "+" + std::to_string(stageGold_), true},
     };
     float ry = y + 36;
-    for (int i = 0; i < static_cast<int>(rows.size()) && i < revealed_; i++, ry += 22) {
+    for (int i = 0; i < static_cast<int>(rows.size()) && i < revealed_ - 3; i++, ry += 22) {
         const Row& r = rows[static_cast<size_t>(i)];
         ui_.Text(ui::Medium, x + 18, ry, r.ok ? col::White : col::DarkGrey, r.label);
         ui_.Text(ui::Medium, x + w - 18, ry, r.ok ? (i == 7 ? col::Yellow : col::Green) : col::DarkGrey, r.value, Align::Right);
     }
-    if (revealed_ >= 9) {
+    if (revealed_ >= 10) {
         ui_.Text(ui::Medium, x + 18, y + h - 54, col::White, T("Gameplay/Results_Rank", "Rank"));
         if (!ui_.Sprite(RankSprite(res.rank), x + w - 70, y + h - 64, 48, 48))
             ui_.Text(ui::Large, x + w - 40, y + h - 58, col::Yellow, RankLetter(res.rank), Align::Center);
@@ -531,6 +546,11 @@ void App::DrawPlayerCard(const HumanPlayer& hp, float x, float y, float w, bool 
 
 void App::DrawManage() {
     if (st_.view) DrawStage(), ui_.Begin();
+    if (gameUi_.loaded()) DrawBlackFade();
+    if (gameUi_.loaded() && DrawManageCanvas()) {
+        Hints(ui_, {{Input::Confirm, T("Gameplay/Upgrades_Upgrade", "Upgrade")}, {Input::Back, T("General/MenuNav_Continue", "Continue")}});
+        return;
+    }
     ui_.Shade(0.65f);
     Run& run = *run_;
     const float W = ui_.W(), H = ui_.H();
@@ -587,15 +607,21 @@ void App::DrawManage() {
 
 void App::DrawKeepGoing() {
     if (st_.view) DrawStage(), ui_.Begin();
+    if (gameUi_.loaded()) DrawBlackFade();
+    if (gameUi_.loaded() && DrawKeepGoingCanvas()) return Hints(ui_, {{Input::Confirm, T("General/MenuNav_Select", "Select")}});
     DrawConfirm(T("Gameplay/Upgrades_Continue_Hdr", "Keep Going?"), T("Gameplay/Upgrades_Continue", "You can stop here and resume another time."),
                 {T("Gameplay/StageEnd_SaveAndQuit_ContinuePlaying", "Continue Playing"), T("Gameplay/StageEnd_SaveAndQuit", "Save & Quit")}, sel_);
 }
 
 void App::DrawOverwrite() {
     if (st_.view) DrawStage(), ui_.Begin();
+    if (gameUi_.loaded()) DrawBlackFade();
+    if (gameUi_.loaded() && DrawOverwriteCanvas())
+        return Hints(ui_, {{Input::Confirm, T("General/MenuNav_Select", "Select")}, {Input::Back, T("General/MenuNav_Back", "Back")}});
     DrawConfirm(T("Gameplay/Upgrades_QuitConfirm_Hdr", "Overwrite Existing Save Data?"), T("Gameplay/Upgrades_QuitConfirm", ""),
                 {T("Gameplay/StageEnd_SaveAndQuit_Overwrite", "Overwrite Old Data"),
-                 T("Gameplay/StageEnd_SaveAndQuit_QuitWithoutSaving", "Quit Without Saving"), T("General/MenuNav_Back", "Back")},
+                 T("Gameplay/StageEnd_SaveAndQuit_QuitWithoutSaving", "Quit Without Saving"),
+                 T("Gameplay/StageEnd_SaveAndQuit_ContinuePlaying", "Continue Playing")},
                 sel_);
 }
 

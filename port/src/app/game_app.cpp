@@ -649,7 +649,7 @@ void App::InputPause(Input in) {
         Go(st_.started ? Screen::Play : Screen::StageStart);
         return;
     }
-    if (Nav(in, &sel_, 5)) sound_.PlayCue("MenuMove");
+    if (Nav(in, &sel_, 4)) sound_.PlayCue("MenuMove");
     if (in != Input::Confirm) return;
     switch (sel_) {
     case 0:
@@ -657,26 +657,22 @@ void App::InputPause(Input in) {
         Go(st_.started ? Screen::Play : Screen::StageStart);
         break;
     case 1:
-        if (!RestartAllowed() || !st_.started) {
-            sound_.PlayCue("MenuInvalid");
-            break;
-        }
-        sound_.PlayCue("MenuSubmit");
-        Go(Screen::PauseConfirm, 1);
-        sel2_ = 1; // 1 = restart confirmation
-        break;
-    case 2:
         sound_.PlayCue("MenuSubmit");
         optionsReturn_ = Screen::Pause;
         Go(Screen::Options);
         break;
+    case 2:
+        if (!RestartAllowed() || !st_.started) { // MenuObjectLocker
+            sound_.PlayCue("MenuInvalid");
+            break;
+        }
+        sound_.PlayCue("MenuSubmit");
+        Go(Screen::PauseConfirm, 1); // Stay first, as the page's first button
+        sel2_ = 1;                   // 1 = restart confirmation
+        break;
     case 3:
         sound_.PlayCue("MenuSubmit");
-        OpenHowToPlay(Screen::Pause);
-        break;
-    case 4:
-        sound_.PlayCue("MenuSubmit");
-        Go(Screen::PauseConfirm, 0);
+        Go(Screen::PauseConfirm, 1);
         sel2_ = 0; // 0 = quit confirmation
         break;
     }
@@ -841,7 +837,7 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
     case Screen::SkullKeys:
     case Screen::Unlocks: inputs->push_back(Input::Confirm); break;
     case Screen::Results:
-        if (revealed_ >= 9 && timer_ > 4.0f) inputs->push_back(Input::Confirm);
+        if (revealed_ >= kResultSteps && timer_ > 6.5f) inputs->push_back(Input::Confirm);
         break;
     default: break;
     }
@@ -903,7 +899,7 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 sound_.PlayCue("MenuMove");
             } else if (IsBack(in) || in == Input::Menu || (in == Input::Confirm && sel_ == 1)) {
                 sound_.PlayCue("MenuCancel");
-                Go(Screen::Pause, sel2_ == 0 ? 4 : 1);
+                Go(Screen::Pause, sel2_ == 0 ? 3 : 2);
                 break;
             } else if (in == Input::Confirm) {
                 sound_.PlayCue("MenuSubmit");
@@ -946,14 +942,27 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
         }
         break;
     case Screen::Results:
-        if (int n = static_cast<int>((timer_ - 0.4f) / 0.3f); n > revealed_ && revealed_ < 9) { // rows appear one by one
-            revealed_ = n;
-            sound_.PlayCue(revealed_ >= 9 ? "Results_ShowRank" : "Results_ShowStat");
+        // mpaResultsScreen.AppearanceSequence: the strip, the six stats 0.25 s apart, the total, the
+        // gold, the rank (its sound 0.25 s later) and the run's score and gold
+        {
+            static const float steps[kResultSteps] = {0.0f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.75f, 3.25f, 4.25f, 4.5f, 5.5f};
+            static const char* const cues[kResultSteps] = {nullptr, "Results_ShowStat", "Results_ShowStat", "Results_ShowStat",
+                                                           "Results_ShowStat", "Results_ShowStat", "Results_ShowStat", "Results_ShowTotal",
+                                                           "Results_ShowGold", nullptr, "Results_ShowRank", nullptr};
+            while (revealed_ < kResultSteps && timer_ >= steps[revealed_]) {
+                if (cues[revealed_]) sound_.PlayCue(cues[revealed_]);
+                revealed_++;
+            }
         }
         for (Input in : inputs)
-            if (in == Input::Confirm && timer_ > 0.5f) {
+            if (in == Input::Confirm) {
                 sound_.PlayCue("MenuSubmit");
-                AfterResults();
+                if (revealed_ < kResultSteps) { // Skip: everything at once, silently
+                    revealed_ = kResultSteps;
+                    timer_ = 100;
+                } else {
+                    AfterResults();
+                }
                 break;
             }
         break;
@@ -987,10 +996,15 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
             break;
         }
         break;
-    case Screen::Overwrite: // Overwrite Old Data / Quit Without Saving / Back
+    case Screen::Overwrite: // Overwrite Old Data / Quit Without Saving / Continue Playing
         for (Input in : inputs) {
             if (Nav(in, &sel_, 3)) sound_.PlayCue("MenuMove");
-            if (IsBack(in) || (in == Input::Confirm && sel_ == 2)) {
+            if (in == Input::Confirm && sel_ == 2) {
+                sound_.PlayCue("MenuSubmit");
+                NextStage(false);
+                break;
+            }
+            if (IsBack(in)) {
                 sound_.PlayCue("MenuCancel");
                 Go(Screen::KeepGoing, 1);
                 break;
