@@ -66,6 +66,7 @@ struct HelpPage {
     std::string name, header, headerFallback;
     std::vector<HelpItem> items;
 };
+void DrawHints(ui::Ui& u, const std::vector<std::pair<Input, std::string>>& hints); // the bottom row of button hints
 struct TileInfo {
     std::string header, headerFallback, text, textFallback, color;
     bool isBall = false, isHazard = false;
@@ -337,6 +338,8 @@ private:
     bool DrawTeamInfoCanvas();
     bool DrawGameplayPopups();
     bool DrawSuggestUndoCanvas();
+    bool DrawHowToPlayCanvas();
+    std::vector<int> HowToPlayButtons(const ui::Canvas& c, int page) const;
     void InputTeamInfo(Input in);
     void FillAttackTooltip(ui::Canvas& c, int tip, const AttackConfig* cfg, int damage, int knockback, int stun, bool shoot);
     void BuildTimeline(ui::Canvas& c, int root, int dataRoot);

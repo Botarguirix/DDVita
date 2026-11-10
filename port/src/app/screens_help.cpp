@@ -14,6 +14,14 @@ using ui::Align;
 namespace col = ui::col;
 
 void App::DrawHowToPlay() {
+    if ((helpReturn_ == Screen::Pause || helpReturn_ == Screen::TeamInfo) && st_.view) DrawBlackFade();
+    if (gameUi_.loaded() && DrawHowToPlayCanvas()) {
+        std::vector<std::pair<Input, std::string>> hints = {{Input::Up, T("General/MenuNav_Next", "Next")}};
+        if (helpMaxScroll_ > 0) hints.emplace_back(Input::Right, T("General/MenuNav_Scroll", "Scroll"));
+        hints.emplace_back(Input::Back, T("General/MenuNav_Back", "Back"));
+        DrawHints(ui_, hints);
+        return;
+    }
     if ((helpReturn_ == Screen::Pause || helpReturn_ == Screen::TeamInfo) && st_.view) ui_.Shade(0.75f);
     const float W = ui_.W(), H = ui_.H();
     ui_.Text(ui::Large, W * 0.5f, 8, col::White, T("FrontEnd/HowToPlay", "How to Play"), Align::Center);

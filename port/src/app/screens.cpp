@@ -120,6 +120,8 @@ float PopupHeight(ui::Ui& u, const std::string& body, float w, size_t buttons) {
 }
 } // namespace
 
+void DrawHints(ui::Ui& u, const std::vector<std::pair<Input, std::string>>& hints) { Hints(u, hints); }
+
 void App::DrawConfirm(const std::string& header, const std::string& body, const std::vector<std::string>& options, int sel) {
     ui_.Shade(0.55f);
     float w = std::min(360.0f, ui_.W() - 40), h = PopupHeight(ui_, body, w, options.size());

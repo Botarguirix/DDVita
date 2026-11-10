@@ -469,7 +469,7 @@ void App::InputHowToPlay(Input in) {
         sound_.PlayCue("MenuMove");
         helpScroll_ = 0;
     } else if (in == Input::Left || in == Input::Right) {
-        float s = std::clamp(helpScroll_ + (in == Input::Right ? 48.0f : -48.0f), 0.0f, helpMaxScroll_);
+        float s = std::clamp(helpScroll_ + (in == Input::Right ? 32.0f : -32.0f), 0.0f, helpMaxScroll_);
         if (s != helpScroll_) sound_.PlayCue("MenuMove");
         helpScroll_ = s;
     }

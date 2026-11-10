@@ -172,6 +172,8 @@ const char* ButtonName(Input in) {
     case Input::Left:
     case Input::Right: return "Left/Right";
     case Input::Info: return "I";
+    case Input::Help: return "F2";
+    case Input::Bars: return "H";
     case Input::Confirm: return "Enter";
     case Input::PassTake: return "Q";
     case Input::Shoot: return "E";

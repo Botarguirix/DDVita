@@ -191,6 +191,8 @@ const char* ButtonName(Input in) {
     case Input::Left:
     case Input::Right: return "Left/Right";
     case Input::Info: return "R";
+    case Input::Help: return "Touch";
+    case Input::Bars: return "Rear touch";
     case Input::Confirm:
     case Input::Yes: return "Cross";
     case Input::Rest:
