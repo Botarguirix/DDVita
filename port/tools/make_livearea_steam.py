@@ -62,8 +62,11 @@ def shade_bottom(img, start, alpha):
     img.alpha_composite(dark)
 
 
-def save_indexed(img, path):  # the LiveArea wants 8-bit palette PNGs
-    img.convert('RGB').quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(path, optimize=True)
+def save_indexed(img, path):  # the LiveArea wants 8-bit palette PNGs (0x8010113D otherwise)
+    q = img.convert('RGB').quantize(256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pal = q.getpalette()[:768]
+    q.putpalette(pal + [0] * (768 - len(pal)))  # a full 256 entry palette: Pillow then writes 8 bits per pixel
+    q.save(path)
 
 
 def framed(w, h, logo_w, logo_y):
