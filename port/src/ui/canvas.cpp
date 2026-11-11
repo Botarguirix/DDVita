@@ -218,7 +218,18 @@ void Canvas::Truncate(int mark) {
 }
 
 std::string Canvas::TextOf(const CNode& n) const {
-    if (!n.locKey.empty() && loc_) return loc_->Get(n.locKey, n.text);
+    if (!n.locKey.empty() && loc_) {
+        const std::string& s = loc_->Get(n.locKey, n.text);
+        // a Smart String fed by another string (General/System_ToUpperCase is
+        // "{string.ToString.ToUpper}"): the authored text, upper case
+        if (s.find("{string") != std::string::npos) {
+            std::string up = n.text;
+            for (char& ch : up)
+                if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
+            return up;
+        }
+        return s;
+    }
     return n.text;
 }
 
