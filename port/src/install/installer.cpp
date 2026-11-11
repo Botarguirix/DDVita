@@ -1,5 +1,7 @@
 #include "install/installer.h"
 
+#include <cstdlib>
+
 #include <cstdio>
 
 #include "install/export_audio.h"
@@ -12,10 +14,10 @@ namespace dd::install {
 
 namespace {
 
-// render v2: the arenas' Billboard props
+// render v2: the arenas' Billboard props; ui 1: the menus' Canvas trees, 2: + the gameplay UI prefabs, 3: + the options pages, 4: + the ending scene, 5: + transition / intro scenes; audio 3: + the Trial Complete jingle
 const json kVersion = {{"format", 1},
                        {"steps", {{"extract", 1}, {"gamedata", 1}, {"render", 2}, {"fonts", 1}, {"loc", 1},
-                                  {"help", 1}, {"achievements", 1}, {"audio", 2}}}};
+                                  {"help", 1}, {"achievements", 1}, {"audio", 3}, {"ui", 5}}}};
 
 std::string FindDataDir(const std::string& gameDir) {
     for (const std::string& d : ListDir(gameDir, true)) {
@@ -74,6 +76,20 @@ static bool InstallSteps(const std::string& gameDir, const std::string& outDir, 
         g.SetScriptTrees([&](const std::string& a, const std::string& c) { return layouts.Tree(a, c); });
         ExtractFilter filter = ExportFilter();
         bool ok = Extract(g, &ex, err, &filter);
+        // the menus' Canvas trees (title scene, gameplay scene) need the script trees too
+        report("Menus", 0.08f);
+        ok = ok && ExportUi(g, ex, "level3", outDir + "/render/ui_title.json", err) &&
+             ExportUi(g, ex, "level4", outDir + "/render/ui_game.json", err) &&
+             // the gameplay scene's UI prefabs (PlayerInfoPanel, the turn nodes, popups...)
+             ExportUi(g, ex, "sharedassets4.assets", outDir + "/render/ui_prefabs.json", err) &&
+             // the menus' shared prefabs (the Options pages)
+             ExportUi(g, ex, "sharedassets3.assets", outDir + "/render/ui_options.json", err) &&
+             // the ending scene (Canvas_EndingScreen: the final results)
+             ExportUi(g, ex, "level6", outDir + "/render/ui_ending.json", err) &&
+             // the boot scene's ScreenTransition, the intro cutscene's subtitles, the trial intro
+             ExportUi(g, ex, "level0", outDir + "/render/ui_transition.json", err) &&
+             ExportUi(g, ex, "level2", outDir + "/render/ui_intro.json", err) &&
+             ExportUi(g, ex, "level5", outDir + "/render/ui_trialintro.json", err);
         g.SetScriptTrees({}); // the exporters only need the MonoBehaviours' base fields from here on
         if (!ok) return false;
     }

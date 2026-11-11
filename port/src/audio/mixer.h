@@ -47,7 +47,7 @@ private:
 class Mixer {
 public:
     static constexpr int kRate = 48000;
-    enum Stream { Music, Jingle, kStreams };
+    enum Stream { Music, Jingle, Crowd, kStreams }; // Crowd: CrowdAudio loop (SFX_Crowd, in SoundGroup)
     // AudioMixer groups of the original (the Music stream plays in MusicGroup, Jingle in JingleGroup)
     enum Group { MasterGroup, MusicGroup, JingleGroup, SoundGroup, VoiceGroup, kGroups };
 

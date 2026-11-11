@@ -32,6 +32,7 @@ void Game::Emit(Ev type, const Entity* actor, V2 from, V2 to, int value, int ext
     e.value = value;
     e.extra = extra;
     events.push_back(std::move(e));
+    if (meta) meta->OnEvent(*this, events.back());
 }
 
 void Game::Log(const std::string& text) {
@@ -96,6 +97,8 @@ void Game::SpawnTreasure(V2 pos, const TreasureConfig* c) {
 
 void Game::SpawnPlayers() {
     V2 starts[2] = {{0, fieldY - 1}, {0, 0}};
+    // PlayerManager.SwapPlayerPositions: two players trade places, a lone player takes the other start
+    if (run.swapPositions) std::swap(starts[0], starts[1]);
     for (size_t i = 0; i < run.activePlayers.size() && i < 2; i++) {
         HumanPlayer* hp = run.activePlayers[i];
         if (run.ballCarrierIndex >= static_cast<int>(run.activePlayers.size())) run.ballCarrierIndex = 0;
@@ -171,6 +174,7 @@ void Game::ChangePhase(Phase p) {
         run.ResetStagePlayerReferences();
         CalculateStageScore();
         ClearAndHideAllIntentions();
+        if (meta) meta->OnStageEnded(*this);
         break;
     default: break;
     }
@@ -221,6 +225,7 @@ bool Game::Select(const Command& c) {
 void Game::ExecutePlayerAction() {
     Command command = command_;
     Player* p = command.player;
+    if (meta) meta->OnPlayerAction(*this, command);
     switch (command.actionConfig->action) {
     case ActorAction::Char_Step: p->GA_Char_Step(command.direction); break;
     case ActorAction::Char_Attack: p->cAttack->Attack_Coroutine(command.direction); break;
@@ -677,6 +682,12 @@ std::vector<Command> Game::GetCommands() {
 // ---------------------------------------------------------------------------------------------
 // StageScore / Gold
 // ---------------------------------------------------------------------------------------------
+int Game::ParBonusRankTarget() const {
+    const ScoringConfig& sc = data.scoring;
+    FieldSize f = run.CurrentStage().fieldSize;
+    return f == FieldSize::Small ? sc.parBonusRankTargetSmall : f == FieldSize::Medium ? sc.parBonusRankTargetMedium : sc.parBonusRankTargetLarge;
+}
+
 void Game::CalculateStageScore() {
     const ScoringConfig& sc = data.scoring;
     const TeamConfig* team = run.team;
@@ -705,6 +716,7 @@ void Game::CalculateStageScore() {
         scoreTreasure = RoundToInt(static_cast<float>(treasure) * team->traitMultiplyScoreBonusTreasure());
     }
     int before = scoreComplete + scoreTouchdown + scoreWithinPar + scoreParBonus + scoreTreasure;
+    scoreParts_ = StageScoreParts{scoreComplete, scoreTouchdown, scoreWithinPar, scoreParBonus, scoreTreasure, gemCount};
     // Score.GetBallModMultiplier(currentEffect, 1)
     float ballMult = 1.0f;
     if (run.ballEffect == DifficultyEffect::Easier)

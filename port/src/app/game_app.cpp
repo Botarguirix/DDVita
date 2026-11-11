@@ -22,6 +22,7 @@
 #include "app/platform.h"
 #include "core/calendar.h"
 #include "core/session_generator.h"
+#include "app/loading_screen.h"
 #include "install/installer.h"
 
 namespace dd::app {
@@ -64,6 +65,8 @@ Input ScriptKey(char k) {
     case 'Z': return Input::Rest;
     case 'X': return Input::Undo;
     case 'I': return Input::Info;
+    case 'H': return Input::Bars;
+    case 'W': return Input::Help;
     default: return Input::None;
     }
 }
@@ -92,16 +95,45 @@ App::App(Renderer& r, Assets& assets, const GameData& data, audio::Sound& sound,
     if (!meta_.LoadDefs(dataDir + "/achievements.json")) std::fprintf(stderr, "no achievements.json: achievements are not shown\n");
     loc_.Load(dataDir + "/loc/en.json"); // language selection: meta milestone
     help_.Load(dataDir + "/help.json");
+    titleUi_.Load(dataDir + "/render/ui_title.json");
+    gameUi_.Load(dataDir + "/render/ui_game.json");
+    prefabUi_.Load(dataDir + "/render/ui_prefabs.json");
+    endingUi_.Load(dataDir + "/render/ui_ending.json");
+    transitionUi_.Load(dataDir + "/render/ui_transition.json");
+    introUi_.Load(dataDir + "/render/ui_intro.json");
+    trialIntroUi_.Load(dataDir + "/render/ui_trialintro.json");
+    optionsUi_.Load(dataDir + "/render/ui_options.json");
     settings_.Load(settingsPath_);
     settings_.Apply(mixer_);
+    ApplyVisualSettings();
+    sound_.SetCrowdSetting(settings_.crowd);
     hasSave_ = RecordExists(savePath_);
 }
 
 // ---------------------------------------------------------------------------------------------
 // Flow
 // ---------------------------------------------------------------------------------------------
+namespace {
+// the Unity scene a screen belongs to (a change of scene slams the ScreenTransition shut and open)
+int SceneOf(Screen s, Screen helpReturn, Screen optionsReturn) {
+    switch (s) {
+    case Screen::Title: case Screen::Modes: case Screen::NewGame: case Screen::Teams: case Screen::Achievements:
+    case Screen::Unlocks: case Screen::Credits: return 0;
+    case Screen::HowToPlay: return helpReturn == Screen::Title ? 0 : 1;
+    case Screen::Options: return optionsReturn == Screen::Title ? 0 : 1;
+    case Screen::Intro: return 2;
+    case Screen::TrialIntro: return 3;
+    case Screen::Ending: return 4;
+    default: return 1;
+    }
+}
+} // namespace
+
 void App::Go(Screen s, int sel) {
     if (testing && s != screen_) std::printf("screen %d at %.1f s\n", static_cast<int>(s), static_cast<double>(clock));
+    // a new scene, or the gameplay scene loaded again for the next stage
+    if (SceneOf(s, helpReturn_, optionsReturn_) != SceneOf(screen_, helpReturn_, optionsReturn_) || (s == Screen::StageStart && screen_ != Screen::StageStart))
+        transAt_ = clock;
     screen_ = s;
     sel_ = sel;
     sel2_ = 0;
@@ -160,7 +192,7 @@ void App::GoToTitle() {
     season_ = sc ? sc->seasonalEvent : SeasonalEvent::None;
     seasonJingleTimer_ = sc && season_ != SeasonalEvent::None && sc->titleScreenJingle ? 0.9f : -1;
     QueueUnlockPopups();
-    Go(unlockPopups_.empty() ? Screen::Title : Screen::Unlocks);
+    Go(unlockPopups_.empty() ? Screen::Title : Screen::Unlocks, hasSave_ ? 0 : 1);
 }
 
 void App::NewRun(GameMode mode, int team, int seed) {
@@ -217,6 +249,7 @@ void App::StartStage() {
     st_.view.reset();
     st_.game = std::make_unique<Game>(*run_);
     st_.game->suggestUndo = settings_.suggestUndo;
+    meta_.teamIndex = rec_.mode == GameMode::DailyChallenge ? 0 : rec_.team;
     st_.game->meta = &meta_; // only the stage being played reports (never the replays)
     st_.game->Start();
     st_.view = std::make_unique<StageView>(assets_, r_, *st_.game);
@@ -235,7 +268,22 @@ void App::StartStage() {
     rec_.current.inputs.clear();
     rec_.current.meta.clear();
     rec_.current.ball = static_cast<int>(run_->ballEffect);
+    rec_.current.swap = run_->swapPositions;
+    rec_.current.carrier = run_->ballCarrierIndex;
     defeat_ = false;
+    if (trialIntroPending_) {
+        trialIntroPending_ = false;
+        // TrialIntro.GetEnemiesFromTrial: the trial's monsters in tile order, up to five
+        trialLineup_.clear();
+        for (const Stage& stage : run_->session.trials[static_cast<size_t>(run_->currentTrial)].stages)
+            for (const TileData& t : stage.tiles)
+                if (t.enemyConfig && trialLineup_.size() < 5 &&
+                    std::find(trialLineup_.begin(), trialLineup_.end(), t.enemyConfig) == trialLineup_.end())
+                    trialLineup_.push_back(t.enemyConfig);
+        sound_.FadeOutMusic(0.5f);
+        Go(Screen::TrialIntro, 0);
+        return;
+    }
     Go(Screen::StageStart, 0);
 }
 
@@ -268,7 +316,17 @@ void App::StageOver() {
 
 // StageEndUI.ResultsScreenHidden -> team management when the run goes on
 void App::AfterResults() {
-    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial()) Go(Screen::Manage);
+    if (testing && std::getenv("DDVITA_TEST_ENDING")) { // (the final results after any stage, for screenshots)
+        EndRun();
+        return;
+    }
+    // (DDVITA_TEST_TRIAL: the trial's page after any stage, for screenshots)
+    bool trialEnd = run_->currentStageIsLastInCurrentTrial() || (testing && std::getenv("DDVITA_TEST_TRIAL"));
+    if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial() && trialEnd && prefabUi_.loaded()) {
+        Go(Screen::TrialComplete);
+        sound_.PlayJingle("jingle.trialComplete"); // TrialCompleteTimeline.Show
+    }
+    else if (!defeat_ && !run_->currentStageIsFinalStageInFinalTrial()) Go(Screen::Manage);
     else KeepGoingOrQuit();
 }
 
@@ -300,6 +358,9 @@ void App::NextStage(bool saveAndQuit) {
     rec_.stages.push_back(rec_.current);
     rec_.restartUsed = false; // LeagueManager.IncrementStage
     run_->AdvanceStage();
+    run_->swapPositions = false;
+    // GameFlow.NextStage: a new trial opens with its intro (unless cinematics are skipped)
+    trialIntroPending_ = run_->currentStage == 0 && !settings_.autoSkipCinematics && !testing;
     sound_.IncrementStageMusicIndex();
     rec_.current = StageRecord{};
     rec_.current.ball = static_cast<int>(run_->ballEffect);
@@ -320,6 +381,11 @@ void App::EndRun() {
         sound_.PlayNamedMusic("music.endingVictory", 1.0f, 3.0f);
     }
     meta_.RunEnded(*run_, rec_.team);
+    {
+        Date d = Today(); // DateTime.ToShortDateString (en-US)
+        std::string date = std::to_string(d.month) + "/" + std::to_string(d.day) + "/" + std::to_string(d.year);
+        for (const HumanPlayer* p : run_->activePlayers) meta_.AddHallOfFameEntry(p->playerName, date);
+    }
     SaveMeta();
     std::printf("run over: final score %d\n", run_->GetFinalScoreTotal());
     std::fflush(stdout);
@@ -330,49 +396,57 @@ void App::EndRun() {
 // Input
 // ---------------------------------------------------------------------------------------------
 void App::InputTitle(Input in) {
-    // rows: Continue (when saved), New Game, How to Play, Stats & Achievements, Options, Quit (PC)
-    std::vector<int> rows;
-    if (hasSave_) rows.push_back(0);
-    rows.push_back(1);
-    rows.push_back(4);
-    rows.push_back(5);
-    rows.push_back(2);
-    if (platform::CanQuit()) rows.push_back(3);
-    if (Nav(in, &sel_, static_cast<int>(rows.size()))) sound_.PlayCue("MenuMove");
+    // MenuPage_MainMenu's buttons, all always there: Continue (locked without a saved run),
+    // New Game, How to Play, Stats & Achievements, Options, Credits
+    if (Nav(in, &sel_, 6)) sound_.PlayCue("MenuMove");
     if (in != Input::Confirm) return;
+    if (sel_ == 0 && !hasSave_) { // MenuObjectLocker (LockCondition.SessionSaveDataDoesNotExist)
+        sound_.PlayCue("MenuInvalid");
+        return;
+    }
     sound_.PlayCue("MenuSubmit");
-    switch (rows[static_cast<size_t>(sel_)]) {
+    switch (sel_) {
     case 0:
         if (!ContinueRun()) hasSave_ = false;
         break;
     case 1: Go(Screen::Modes); break;
-    case 2:
-        optionsReturn_ = Screen::Title;
-        Go(Screen::Options);
-        break;
-    case 3: Go(Screen::Title, -1); break; // -1: quit (Frame returns false)
-    case 4: OpenHowToPlay(Screen::Title); break;
-    case 5:
+    case 2: OpenHowToPlay(Screen::Title); break;
+    case 3:
         metaTab_ = 0;
         Go(Screen::Achievements);
         break;
+    case 4:
+        optionsReturn_ = Screen::Title;
+        optionsPage_ = 0;
+        Go(Screen::Options);
+        break;
+    case 5: Go(Screen::Credits); break;
     }
 }
 
 // Stats & Achievements: the d-pad moves through the achievement grid, Switch flips to the stats
 void App::InputAchievements(Input in) {
-    if (in == Input::Menu || IsBack(in)) {
+    if (in == Input::Menu || IsBack(in)) { // mooChangeMenuPage / mooPreviousPage
         sound_.PlayCue("MenuCancel");
-        Go(Screen::Title, hasSave_ ? 3 : 2);
+        if (metaTab_ != 0) {
+            sel_ = metaTab_ - 1;
+            metaTab_ = 0;
+        } else {
+            Go(Screen::Title, 3);
+        }
         return;
     }
-    if (in == Input::Switch || (metaTab_ == 1 && in == Input::Confirm)) {
-        metaTab_ ^= 1;
-        sound_.PlayCue("MenuMove");
+    if (metaTab_ == 0) { // Stats, Achievements, Hall of Fame
+        if (Nav(in, &sel_, 3)) sound_.PlayCue("MenuMove");
+        if (in == Input::Confirm) {
+            sound_.PlayCue("MenuSubmit");
+            metaTab_ = sel_ + 1;
+            sel_ = 0;
+        }
         return;
     }
     int n = static_cast<int>(meta_.defs.size());
-    if (metaTab_ != 0 || n == 0) return;
+    if (metaTab_ != 2 || n == 0) return;
     int s = sel_;
     switch (in) {
     case Input::Left: s = s % kAchievementCols == 0 ? std::min(s + kAchievementCols - 1, n - 1) : s - 1; break;
@@ -387,6 +461,23 @@ void App::InputAchievements(Input in) {
     }
 }
 
+void App::StartIntro(bool force) {
+    if (!force && (settings_.autoSkipCinematics || testing)) {
+        GoToTitle();
+        return;
+    }
+    sound_.PlayNamedMusic("music.boss", 0.5f, 2.0f);
+    Go(Screen::Intro);
+}
+
+// CutsceneController / TrialIntro: Confirm, Start or Back skip
+void App::InputCinematic(Input in) {
+    if ((in != Input::Confirm && in != Input::Menu && !IsBack(in)) || timer_ < 0.3f) return;
+    sound_.PlayCue("MenuSubmit");
+    if (screen_ == Screen::Intro) GoToTitle();
+    else Go(Screen::StageStart, 0);
+}
+
 void App::OpenHowToPlay(Screen from) {
     helpReturn_ = from;
     helpScroll_ = 0;
@@ -399,14 +490,14 @@ void App::InputHowToPlay(Input in) {
         sound_.PlayCue("MenuCancel");
         ClearHelpSprites();
         // back to the How to Play entry of the menu it came from
-        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : (hasSave_ ? 2 : 1));
+        Go(helpReturn_, helpReturn_ == Screen::Pause ? 3 : helpReturn_ == Screen::TeamInfo ? 1 : 2);
         return;
     }
     if (Nav(in, &sel_, HelpPageCount())) {
         sound_.PlayCue("MenuMove");
         helpScroll_ = 0;
     } else if (in == Input::Left || in == Input::Right) {
-        float s = std::clamp(helpScroll_ + (in == Input::Right ? 48.0f : -48.0f), 0.0f, helpMaxScroll_);
+        float s = std::clamp(helpScroll_ + (in == Input::Right ? 32.0f : -32.0f), 0.0f, helpMaxScroll_);
         if (s != helpScroll_) sound_.PlayCue("MenuMove");
         helpScroll_ = s;
     }
@@ -417,7 +508,7 @@ void App::InputModes(Input in) {
     if (Nav(in, &sel_, 4)) sound_.PlayCue("MenuMove");
     if (IsBack(in)) {
         sound_.PlayCue("MenuCancel");
-        Go(Screen::Title, hasSave_ ? 1 : 0);
+        Go(Screen::Title, 1);
         return;
     }
     if (in != Input::Confirm) return;
@@ -428,19 +519,39 @@ void App::InputModes(Input in) {
     }
     sound_.PlayCue("MenuSubmit");
     newMode_ = modes[sel_];
-    int seed = static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff);
+    if (!meta_.teams.empty()) newTeam_ = std::clamp(meta_.teamIndex, 0, static_cast<int>(meta_.teams.size()) - 1);
+    Go(Screen::NewGame);
+}
+
+// MenuPage_NewGame: Begin (0) and Change Team (1)
+void App::InputNewGame(Input in) {
+    if (IsBack(in)) {
+        sound_.PlayCue("MenuCancel");
+        Go(Screen::Modes, newMode_ == GameMode::Normal ? 0 : newMode_ == GameMode::DailyChallenge ? 1 : newMode_ == GameMode::Boss ? 2 : 3);
+        return;
+    }
+    const GameModeConfig* m = data_.GetGameModeConfig(newMode_);
     // the Teams button stays locked until the first Skull Key (LockCondition.NotEarnedEnoughKeysForFirstTeam)
-    if ((m && !m->allowTeamSelection) || meta_.TeamSelectionLocked()) NewRun(newMode_, 0, seed);
-    else Go(Screen::Teams);
+    bool teams = newMode_ != GameMode::DailyChallenge && !((m && !m->allowTeamSelection) || meta_.TeamSelectionLocked());
+    if (newMode_ != GameMode::DailyChallenge && Nav(in, &sel_, 2)) sound_.PlayCue("MenuMove");
+    if (in != Input::Confirm) return;
+    if (sel_ == 1) {
+        if (!teams) return sound_.PlayCue("MenuInvalid");
+        sound_.PlayCue("MenuSubmit");
+        Go(Screen::Teams, newTeam_);
+        return;
+    }
+    sound_.PlayCue("MenuSubmit");
+    int team = teams ? newTeam_ : 0;
+    NewRun(newMode_, team, static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff));
 }
 
 void App::InputTeams(Input in) {
     int n = static_cast<int>(data_.teams.size());
     if (Nav(in, &sel_, n)) sound_.PlayCue("MenuMove");
-    if (IsBack(in)) {
+    if (IsBack(in)) { // mooPreviousPage
         sound_.PlayCue("MenuCancel");
-        int m = newMode_ == GameMode::Normal ? 0 : newMode_ == GameMode::DailyChallenge ? 1 : newMode_ == GameMode::Boss ? 2 : 3;
-        Go(Screen::Modes, m);
+        Go(Screen::NewGame, 1);
         return;
     }
     if (in != Input::Confirm) return;
@@ -453,35 +564,78 @@ void App::InputTeams(Input in) {
         }
         return;
     }
+    // mooDeathballTeam: the team becomes the current one and the new game page shows it
     sound_.PlayCue("MenuSubmit");
-    NewRun(newMode_, sel_, static_cast<int>(static_cast<long long>(platform::Seconds() * 1e6) & 0x7fffffff));
+    newTeam_ = sel_;
+    meta_.teamIndex = sel_;
+    Go(Screen::NewGame, 0);
 }
 
 // StageStartPanel: swap ball (Easy / Normal / Hard), then Play Deathball
+// StageStartPanel's buttons: sel_ 0 Play Deathball, 1 Swap Players, 2 Swap Ball, 3..5 the Easy /
+// Normal / Hard balls (the row above). L and Square keep their shortcuts.
 void App::InputStageStart(Input in) {
     bool ballMods = !run_->team->traitBlockBallMods();
+    bool two = run_->activePlayers.size() == 2;
     static const DifficultyEffect order[3] = {DifficultyEffect::Easier, DifficultyEffect::Neutral, DifficultyEffect::Harder};
-    if (ballMods && (in == Input::Left || in == Input::Right)) {
-        int i = run_->ballEffect == DifficultyEffect::Easier ? 0 : run_->ballEffect == DifficultyEffect::Neutral ? 1 : 2;
-        int j = std::clamp(i + (in == Input::Right ? 1 : -1), 0, 2);
-        if (j != i) {
-            sound_.PlayCue("MenuMove");
-            run_->ballEffect = order[j]; // BallMods.SetBallMod: the stage is rebuilt with the new ball
-            StartStage();
-        }
-        return;
-    }
-    if (in == Input::Menu) {
+    auto rebuild = [&] { // the stage is set up again; the cursor stays where it was
+        int keep = sel_;
+        StartStage();
+        sel_ = keep;
+    };
+    auto swapPlayers = [&] {
+        sound_.PlayCue("MenuSubmit");
+        run_->swapPositions = !run_->swapPositions;
+        rebuild();
+    };
+    auto swapBall = [&] {
+        if (!two) return sound_.PlayCue("MenuInvalid");
+        sound_.PlayCue("MenuSubmit");
+        run_->ballCarrierIndex = run_->ballCarrierIndex == 0 ? 1 : 0;
+        rebuild();
+    };
+    int cur = run_->ballEffect == DifficultyEffect::Easier ? 0 : run_->ballEffect == DifficultyEffect::Neutral ? 1 : 2;
+    int prev = sel_;
+    switch (in) {
+    case Input::Up:
+        if (sel_ == 0) sel_ = 2;
+        else if (sel_ == 2) sel_ = 1;
+        else if (sel_ == 1 && ballMods) sel_ = 3 + cur;
+        break;
+    case Input::Down:
+        if (sel_ >= 3) sel_ = 1;
+        else if (sel_ == 1) sel_ = 2;
+        else if (sel_ == 2) sel_ = 0;
+        break;
+    case Input::Left:
+    case Input::Right:
+        if (sel_ >= 3) sel_ = std::clamp(sel_ + (in == Input::Right ? 1 : -1), 3, 5);
+        break;
+    case Input::Switch: swapPlayers(); return;
+    case Input::PassTake: swapBall(); return;
+    case Input::Menu:
         sound_.PlayCue("MenuSubmit");
         Go(Screen::Pause);
         return;
-    }
-    if (in == Input::Confirm) {
+    case Input::Confirm:
+        if (sel_ == 1) return swapPlayers();
+        if (sel_ == 2) return swapBall();
+        if (sel_ >= 3) { // mooDeathballChangeBall: BallMods.SetBallMod (the stage is rebuilt with the new ball)
+            sound_.PlayCue("MenuSubmit");
+            if (sel_ - 3 != cur) {
+                run_->ballEffect = order[sel_ - 3];
+                rebuild();
+            }
+            return;
+        }
         sound_.PlayCue("MenuSubmit");
         st_.started = true;
         sound_.StageStarted(*st_.game);
         Go(Screen::Play);
+        return;
+    default: break;
     }
+    if (sel_ != prev) sound_.PlayCue("MenuMove");
 }
 
 void App::InputPlay(const std::vector<Input>& inputs, bool idle) {
@@ -509,6 +663,16 @@ void App::InputPlay(const std::vector<Input>& inputs, bool idle) {
             sound_.PlayCue("MenuSubmit");
             Go(Screen::Pause);
             return;
+        }
+        if (in == Input::Help && gameUi_.loaded() && prefabUi_.loaded()) { // the toolbar's Help: the team info
+            sound_.PlayCue("MenuSubmit");
+            Go(Screen::TeamInfo, 0);
+            return;
+        }
+        if (in == Input::Bars) { // the port's health bars: the rear touch pad (H on PC) shows / hides them
+            settings_.healthBars = !settings_.healthBars;
+            sound_.PlayCue(settings_.healthBars ? "MenuSubmit" : "MenuCancel");
+            continue;
         }
         if (in == Input::Info) { // "View more info": the popup follows the cursor until toggled off
             showInfo_ = !showInfo_;
@@ -572,7 +736,7 @@ void App::InputPause(Input in) {
         Go(st_.started ? Screen::Play : Screen::StageStart);
         return;
     }
-    if (Nav(in, &sel_, 5)) sound_.PlayCue("MenuMove");
+    if (Nav(in, &sel_, 4)) sound_.PlayCue("MenuMove");
     if (in != Input::Confirm) return;
     switch (sel_) {
     case 0:
@@ -580,60 +744,93 @@ void App::InputPause(Input in) {
         Go(st_.started ? Screen::Play : Screen::StageStart);
         break;
     case 1:
-        if (!RestartAllowed() || !st_.started) {
+        sound_.PlayCue("MenuSubmit");
+        optionsReturn_ = Screen::Pause;
+        optionsPage_ = 0;
+        Go(Screen::Options);
+        break;
+    case 2:
+        if (!RestartAllowed() || !st_.started) { // MenuObjectLocker
             sound_.PlayCue("MenuInvalid");
             break;
         }
         sound_.PlayCue("MenuSubmit");
-        Go(Screen::PauseConfirm, 1);
-        sel2_ = 1; // 1 = restart confirmation
-        break;
-    case 2:
-        sound_.PlayCue("MenuSubmit");
-        optionsReturn_ = Screen::Pause;
-        Go(Screen::Options);
+        Go(Screen::PauseConfirm, 1); // Stay first, as the page's first button
+        sel2_ = 1;                   // 1 = restart confirmation
         break;
     case 3:
         sound_.PlayCue("MenuSubmit");
-        OpenHowToPlay(Screen::Pause);
-        break;
-    case 4:
-        sound_.PlayCue("MenuSubmit");
-        Go(Screen::PauseConfirm, 0);
+        Go(Screen::PauseConfirm, 1);
         sel2_ = 0; // 0 = quit confirmation
         break;
     }
 }
 
 float* App::Volume(int row) {
-    float* v[5] = {&settings_.master, &settings_.music, &settings_.jingles, &settings_.sounds, &settings_.voices};
-    return row >= 0 && row < 5 ? v[row] : nullptr;
+    float* v[6] = {&settings_.master, &settings_.music, &settings_.jingles, &settings_.sounds, &settings_.crowd, &settings_.voices};
+    return row >= 0 && row < 6 ? v[row] : nullptr;
+}
+
+void App::ApplyVisualSettings() {
+    // Pixel Filter: the original's 640x360 (Flashback94); off: the screen's own resolution, 16:9
+    int w = r_.outW(), h = w * 9 / 16;
+    if (h > r_.outH()) h = r_.outH(), w = h * 16 / 9;
+    if (settings_.pixelFilter || w <= 640) r_.SetLowRes(640, 360);
+    else r_.SetLowRes(w, h);
+    r_.SetPixelFonts(!settings_.smoothFonts);
 }
 
 void App::InputOptions(Input in) {
-    if (Nav(in, &sel_, kOptionRows)) sound_.PlayCue("MenuMove");
-    if (in == Input::Menu || IsBack(in)) {
+    if (Nav(in, &sel_, OptionRows())) sound_.PlayCue("MenuMove");
+    if (in == Input::Menu || IsBack(in)) { // mooPreviousPage
         sound_.PlayCue("MenuCancel");
+        if (optionsPage_ != 0) {
+            sel_ = optionsPage_ == 1 ? 0 : optionsPage_ == 3 ? 1 : 2;
+            timer_ = 0;
+            optionsPage_ = 0;
+            return;
+        }
         if (!testing) settings_.Save(settingsPath_);
         Screen back = optionsReturn_;
-        Go(back, back == Screen::Pause ? 2 : back == Screen::Title ? (hasSave_ ? 4 : 3) : 0);
+        Go(back, back == Screen::Pause ? 1 : back == Screen::Title ? 4 : 0);
         return;
     }
-    if (float* v = Volume(sel_)) {
-        if (in == Input::Left || in == Input::Right) {
+    switch (optionsPage_) {
+    case 0:
+        if (in != Input::Confirm) return;
+        sound_.PlayCue("MenuSubmit");
+        if (sel_ == 3) { // mooDeathballRestoreDefaultSettings
+            settings_ = Settings{};
+            settings_.Apply(mixer_);
+            sound_.SetCrowdSetting(settings_.crowd);
+            if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
+            ApplyVisualSettings();
+        } else {
+            optionsPage_ = sel_ == 0 ? 1 : sel_ == 1 ? 3 : 2;
+            timer_ = 0;
+            sel_ = 0;
+        }
+        return;
+    case 1:
+    case 3: {
+        if (in != Input::Confirm && in != Input::Left && in != Input::Right) return;
+        std::vector<ToggleRow> rows = ToggleRows();
+        if (sel_ < 0 || sel_ >= static_cast<int>(rows.size())) return;
+        *rows[static_cast<size_t>(sel_)].value = !*rows[static_cast<size_t>(sel_)].value;
+        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo, st_.game->fastMode = settings_.fastMode;
+        ApplyVisualSettings();
+        sound_.PlayCue("MenuSubmit");
+        return;
+    }
+    default:
+        if (in != Input::Left && in != Input::Right) return;
+        if (float* v = Volume(sel_)) {
             *v = std::clamp(std::round(*v * 10 + (in == Input::Right ? 1 : -1)) / 10, 0.0f, 1.0f);
             settings_.Apply(mixer_);
+            sound_.SetCrowdSetting(settings_.crowd);
             sound_.PlayCue("MenuMove");
         }
-    } else if (sel_ == 5 && (in == Input::Confirm || in == Input::Left || in == Input::Right)) {
-        settings_.suggestUndo = !settings_.suggestUndo;
-        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
-        sound_.PlayCue("MenuSubmit");
-    } else if (sel_ == 6 && in == Input::Confirm) { // mooDeathballRestoreDefaultSettings
-        settings_ = Settings{};
-        settings_.Apply(mixer_);
-        if (st_.game) st_.game->suggestUndo = settings_.suggestUndo;
-        sound_.PlayCue("MenuSubmit");
+        return;
     }
 }
 
@@ -727,6 +924,9 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
         }
         break;
     }
+    case Screen::TrialComplete:
+        if (timer_ > 2.0f) inputs->push_back(Input::Confirm);
+        break;
     case Screen::Manage:
         if (timer_ < 1.5f) return;
         // buy what it can, column by column, then Done
@@ -749,10 +949,11 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
         inputs->push_back(Input::Back);
         break;
     case Screen::Ending: // stops the test (Frame returns false), after a moment on screen
-        if (timer_ > 3.0f) inputs->push_back(Input::Menu);
+        if (timer_ > (endingUi_.loaded() ? EndingDoneTime() : 0.0f) + 3.0f) inputs->push_back(Input::Menu);
         break;
     case Screen::Title:
     case Screen::Modes:
+    case Screen::NewGame:
     case Screen::Teams:
     case Screen::StageStart:
     case Screen::Defeat:
@@ -761,7 +962,7 @@ void App::AutoInputs(std::vector<Input>* inputs, bool idle, float dt) {
     case Screen::SkullKeys:
     case Screen::Unlocks: inputs->push_back(Input::Confirm); break;
     case Screen::Results:
-        if (revealed_ >= 9 && timer_ > 4.0f) inputs->push_back(Input::Confirm);
+        if (revealed_ >= kResultSteps && timer_ > 6.5f) inputs->push_back(Input::Confirm);
         break;
     default: break;
     }
@@ -806,6 +1007,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
     case Screen::Teams:
         for (Input in : inputs) InputTeams(in);
         break;
+    case Screen::NewGame:
+        for (Input in : inputs)
+            if (screen_ == Screen::NewGame) InputNewGame(in);
+        break;
     case Screen::StageStart:
         for (Input in : inputs)
             if (screen_ == Screen::StageStart) InputStageStart(in);
@@ -815,6 +1020,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
         for (Input in : inputs)
             if (screen_ == Screen::Pause) InputPause(in);
         break;
+    case Screen::TeamInfo:
+        for (Input in : inputs)
+            if (screen_ == Screen::TeamInfo) InputTeamInfo(in);
+        break;
     case Screen::PauseConfirm:
         for (Input in : inputs) {
             // sel2_: 0 quit, 1 restart; sel_: 0 = do it, 1 = stay
@@ -823,7 +1032,7 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 sound_.PlayCue("MenuMove");
             } else if (IsBack(in) || in == Input::Menu || (in == Input::Confirm && sel_ == 1)) {
                 sound_.PlayCue("MenuCancel");
-                Go(Screen::Pause, sel2_ == 0 ? 4 : 1);
+                Go(Screen::Pause, sel2_ == 0 ? 3 : 2);
                 break;
             } else if (in == Input::Confirm) {
                 sound_.PlayCue("MenuSubmit");
@@ -866,20 +1075,41 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
         }
         break;
     case Screen::Results:
-        if (int n = static_cast<int>((timer_ - 0.4f) / 0.3f); n > revealed_ && revealed_ < 9) { // rows appear one by one
-            revealed_ = n;
-            sound_.PlayCue(revealed_ >= 9 ? "Results_ShowRank" : "Results_ShowStat");
+        // mpaResultsScreen.AppearanceSequence: the strip, the six stats 0.25 s apart, the total, the
+        // gold, the rank (its sound 0.25 s later) and the run's score and gold
+        {
+            static const float steps[kResultSteps] = {0.0f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.75f, 3.25f, 4.25f, 4.5f, 5.5f};
+            static const char* const cues[kResultSteps] = {nullptr, "Results_ShowStat", "Results_ShowStat", "Results_ShowStat",
+                                                           "Results_ShowStat", "Results_ShowStat", "Results_ShowStat", "Results_ShowTotal",
+                                                           "Results_ShowGold", nullptr, "Results_ShowRank", nullptr};
+            while (revealed_ < kResultSteps && timer_ >= steps[revealed_]) {
+                if (cues[revealed_]) sound_.PlayCue(cues[revealed_]);
+                revealed_++;
+            }
         }
         for (Input in : inputs)
-            if (in == Input::Confirm && timer_ > 0.5f) {
+            if (in == Input::Confirm) {
                 sound_.PlayCue("MenuSubmit");
-                AfterResults();
+                if (revealed_ < kResultSteps) { // Skip: everything at once, silently
+                    revealed_ = kResultSteps;
+                    timer_ = 100;
+                } else {
+                    AfterResults();
+                }
                 break;
             }
         break;
     case Screen::Manage:
         for (Input in : inputs)
             if (screen_ == Screen::Manage) InputManage(in);
+        break;
+    case Screen::TrialComplete: // mooDeathballStageEnd: on to the team
+        for (Input in : inputs)
+            if (in == Input::Confirm && timer_ > 0.5f) {
+                sound_.PlayCue("MenuSubmit");
+                Go(Screen::Manage);
+                break;
+            }
         break;
     case Screen::ManageConfirm: // More Upgrades Available: Continue / Back
         for (Input in : inputs) {
@@ -907,10 +1137,15 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
             break;
         }
         break;
-    case Screen::Overwrite: // Overwrite Old Data / Quit Without Saving / Back
+    case Screen::Overwrite: // Overwrite Old Data / Quit Without Saving / Continue Playing
         for (Input in : inputs) {
             if (Nav(in, &sel_, 3)) sound_.PlayCue("MenuMove");
-            if (IsBack(in) || (in == Input::Confirm && sel_ == 2)) {
+            if (in == Input::Confirm && sel_ == 2) {
+                sound_.PlayCue("MenuSubmit");
+                NextStage(false);
+                break;
+            }
+            if (IsBack(in)) {
                 sound_.PlayCue("MenuCancel");
                 Go(Screen::KeepGoing, 1);
                 break;
@@ -939,9 +1174,10 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 break;
             }
         break;
-    case Screen::Unlocks: // the title's unlock popups, one at a time
-        for (Input in : inputs)
-            if ((in == Input::Confirm || IsBack(in)) && timer_ > 0.5f && !unlockPopups_.empty()) {
+    case Screen::Unlocks: { // the title's unlock popups, one at a time
+        bool hide = timer_ >= 5.0f; // UnlockPopup.displayTime
+        for (Input in : inputs) hide = hide || ((in == Input::Confirm || IsBack(in)) && timer_ > 1.0f);
+        if (hide && !unlockPopups_.empty()) {
                 sound_.PlayCue("MenuSubmit");
                 int u = unlockPopups_.front();
                 if (u == kMusicPopup) {
@@ -957,12 +1193,29 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
                 } else {
                     timer_ = 0;
                 }
+        }
+        break;
+    }
+    case Screen::Credits:
+        for (Input in : inputs)
+            if (in == Input::Menu || IsBack(in) || in == Input::Confirm) {
+                sound_.PlayCue("MenuCancel");
+                Go(Screen::Title, 5);
                 break;
             }
         break;
+    case Screen::Intro:
+    case Screen::TrialIntro:
+        for (Input in : inputs) InputCinematic(in);
+        if (screen_ == Screen::Intro && timer_ > 5 * 3.4f + 1.0f) GoToTitle();
+        else if (screen_ == Screen::TrialIntro && timer_ > 5.0f) Go(Screen::StageStart, 0);
+        break;
     case Screen::Ending:
         for (Input in : inputs)
-            if ((in == Input::Confirm || in == Input::Menu) && timer_ > 1.0f) {
+            if ((in == Input::Confirm || in == Input::Menu) && endingUi_.loaded() && timer_ < EndingDoneTime()) {
+                timer_ = EndingDoneTime(); // mpaEndingResults: SkipButton
+                break;
+            } else if ((in == Input::Confirm || in == Input::Menu) && timer_ > 1.0f) {
                 sound_.PlayCue("MenuSubmit");
                 GoToTitle();
                 break;
@@ -973,7 +1226,9 @@ bool App::Frame(const std::vector<Input>& rawInputs, float dt) {
     // the stage keeps playing under the pause menu only while an action finishes
     if (st_.view && (screen_ == Screen::Play || (st_.started && st_.view->Busy()))) {
         sound_.Update(dt);
-        st_.view->Update(dt);
+        st_.view->dynamicCamera = settings_.dynamicCamera;
+        st_.view->greyBlood = settings_.greyBlood;
+        st_.view->Update(settings_.fastMode ? dt * 1.75f : dt); // Fast Mode: TimingConfig.skipDelaysForFastMode
         if (screen_ == Screen::Play && !st_.view->Busy() && st_.game->phase() == Phase::StageEnded) StageOver();
     } else {
         sound_.Update(dt);
@@ -1014,7 +1269,7 @@ int RunGame(int argc, char** argv) {
     Date date;
     bool fixedDate = false;
     float shotTime = 0, speed = 1;
-    bool autoPlay = false;
+    bool autoPlay = false, intro = false;
     std::vector<std::string> pos;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -1031,6 +1286,8 @@ int RunGame(int argc, char** argv) {
             metaFile = argv[++i];
         } else if (a == "--auto") {
             autoPlay = true;
+        } else if (a == "--intro") { // the boot cutscene even in automated runs (screenshots)
+            intro = true;
         } else {
             pos.push_back(a);
         }
@@ -1044,7 +1301,7 @@ int RunGame(int argc, char** argv) {
         return 1;
     }
     Renderer r;
-    r.Init(ww, wh);
+    r.Init(ww, wh); // the 3D frame's resolution: App::ApplyVisualSettings (Pixel Filter)
 
     // missing or outdated data: say what to do (a message box, except in automated runs) and quit
     bool testing = !shotPath.empty() || !script.empty() || autoPlay;
@@ -1057,10 +1314,22 @@ int RunGame(int argc, char** argv) {
     // the user's own game copied to the console: the data is built from it on the first start (and
     // again when a new version of the port exports more)
     std::string gameCopy = platform::GameCopyDir();
+    const char* assetsOverride = std::getenv("DDVITA_ASSETS");
+    auto loading = std::make_unique<LoadingScreen>(r, assetsOverride ? assetsOverride : platform::FontDir());
+    if (const char* preview = std::getenv("DDVITA_LOADING_PREVIEW")) { // (a screenshot of the loading screen)
+        for (int i = 0; i < 20; i++) loading->Draw("Installing: Textures", 0.42f, true);
+        platform::SaveScreenshot(preview, ww, wh);
+        return 0;
+    }
     if (!testing && pos.empty() && !gameCopy.empty() && install::HasGameCopy(gameCopy) &&
         install::NeedsInstall(platform::SaveDir())) {
+        LoadingScreen* ls = loading.get();
         bool ok = install::Install(gameCopy, platform::SaveDir(), platform::FontDir(),
-                                   [](const char* what, float f) { platform::ShowProgress(what, f); }, &err);
+                                   [ls](const char* what, float f) {
+                                       ls->Draw(std::string("Installing: ") + what, f);
+                                       platform::ShowProgress(what, f); // keeps the console awake
+                                   },
+                                   &err);
         platform::EndProgress();
         if (!ok) return fail("Installing the game data from " + gameCopy + " failed:\n" + err);
         dataDir = platform::DataDir();
@@ -1069,6 +1338,7 @@ int RunGame(int argc, char** argv) {
                             ? "Run instalar.bat on a PC with your Steam copy of Dungeon Deathball."
                             : "Copy the \"Dungeon Deathball_Data\" folder and UnityPlayer.dll from your Steam copy of "
                               "Dungeon Deathball into " + gameCopy + "/ and start the game again.";
+    if (!testing) loading->Draw("Loading", -1, true);
     GameData data;
     Assets assets;
     if (!data.Load(dataDir + "/gamedata.json", &err) || !assets.Load(dataDir + "/render", &r, &err))
@@ -1082,6 +1352,7 @@ int RunGame(int argc, char** argv) {
     if (!sound.Load(dataDir + "/audio", &mixer, &err)) std::fprintf(stderr, "no audio: %s\n", err.c_str());
     else platform::StartAudio(&mixer);
 
+    loading.reset();
     auto app = std::make_unique<App>(r, assets, data, sound, mixer, dataDir);
     app->autoPlay = autoPlay;
     app->fixedDate = fixedDate;
@@ -1099,7 +1370,7 @@ int RunGame(int argc, char** argv) {
         app->NewRun(pos.size() > 2 ? static_cast<GameMode>(std::atoi(pos[2].c_str())) : GameMode::Normal,
                     pos.size() > 3 ? std::atoi(pos[3].c_str()) : 0, std::atoi(mode.c_str()));
     } else {
-        app->GoToTitle();
+        app->StartIntro(intro);
     }
 
     double last = platform::Seconds();
@@ -1126,7 +1397,10 @@ int RunGame(int argc, char** argv) {
         app->Draw();
         r.Flush();
         bool quit = !keep;
-        if (!shotPath.empty() && app->clock >= shotTime) {
+        // DDVITA_SHOT_SCREEN=n: the shot's time counts from screen n (for screens reached at random times)
+        static const char* shotScreen = std::getenv("DDVITA_SHOT_SCREEN");
+        bool shotNow = shotScreen ? app->ScreenIndex() == std::atoi(shotScreen) && app->ScreenTime() >= shotTime : app->clock >= shotTime;
+        if (!shotPath.empty() && shotNow) {
             platform::SaveScreenshot(shotPath, ww, wh);
             std::printf("screenshot %s\n", shotPath.c_str());
             quit = true;

@@ -11,7 +11,7 @@ namespace dd::app {
 // Menu: Start / Esc (pause, open and close menus). Back: Circle / Backspace in menus (Rest also
 // backs out of menus, as Circle does on the Vita). Info: R / I, the info popup of the tile under
 // the cursor.
-enum class Input { None, Up, Down, Left, Right, Confirm, PassTake, Shoot, Rest, Undo, Switch, Yes, No, Log, Quit, Menu, Back, Info };
+enum class Input { None, Up, Down, Left, Right, Confirm, PassTake, Shoot, Rest, Undo, Switch, Yes, No, Log, Quit, Menu, Back, Info, Bars, Help };
 
 namespace platform {
 

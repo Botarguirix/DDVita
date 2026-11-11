@@ -1,6 +1,8 @@
 #include "render/assets.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 
@@ -87,31 +89,89 @@ bool Assets::Load(const std::string& dir, Renderer* r, std::string* err) {
     for (auto& [name, frames] : j.items())
         for (auto& f : frames)
             anims_[name].push_back({f[0].is_null() ? "" : f[0].get<std::string>(), f[1].get<float>()});
-    if (!ReadJson(dir + "/font.json", &j, err)) return false;
-    font_.height = j["height"];
-    for (auto& [code, g] : j["glyphs"].items())
-        font_.glyphs[std::stoi(code)] = {g[0], g[1], g[2], g[3], g[4]};
-    font_.tex = Tex("../font"); // data/render/font.tex
+    if (!LoadFont("font", &font_, err)) return false; // data/render/font.tex
+    const char* names[3] = {"font_s", "font_m", "font_l"};
+    for (int i = 0; i < 3; i++) {
+        std::string ignored;
+        if (!LoadFont(names[i], &menuFonts_[i], &ignored)) std::fprintf(stderr, "no %s: menus use the HUD font\n", names[i]);
+    }
     return true;
+}
+
+bool Assets::LoadFont(const std::string& name, Font* f, std::string* err) {
+    json j;
+    if (!ReadJson(dir_ + "/" + name + ".json", &j, err)) return false;
+    f->height = j["height"];
+    f->ascent = j.value("ascent", f->height);
+    for (auto& [code, g] : j["glyphs"].items()) f->glyphs[std::stoi(code)] = {g[0], g[1], g[2], g[3], g[4]};
+    // the glyphs again with a transparent texel around each: drawn bilinear at fractional scales (the
+    // Vita's 1.5) a glyph then blends into nothing instead of its neighbours in the atlas
+    const Image* src = Img("../" + name);
+    if (!src) return false;
+    Image img;
+    img.w = 1024;
+    int x = 0, y = 0, rowH = 0;
+    std::vector<std::pair<int, int>> at; // where each glyph goes (in glyphs order)
+    for (auto& [code, g] : f->glyphs) {
+        int w = static_cast<int>(g.w) + 2, h = static_cast<int>(g.h) + 2;
+        if (x + w > img.w) x = 0, y += rowH, rowH = 0;
+        at.emplace_back(x, y);
+        x += w;
+        rowH = std::max(rowH, h);
+    }
+    img.h = 1;
+    while (img.h < y + rowH) img.h <<= 1;
+    img.rgba.assign(static_cast<size_t>(img.w) * img.h * 4, 0);
+    size_t i = 0;
+    for (auto& [code, g] : f->glyphs) {
+        auto [dx, dy] = at[i++];
+        int gx = static_cast<int>(g.x), gy = static_cast<int>(g.y), gw = static_cast<int>(g.w), gh = static_cast<int>(g.h);
+        for (int r = 0; r < gh; r++) {
+            if (gy + r < 0 || gy + r >= src->h || gx < 0 || gx + gw > src->w) continue;
+            std::memcpy(&img.rgba[(static_cast<size_t>(dy + 1 + r) * img.w + dx + 1) * 4], &src->rgba[(static_cast<size_t>(gy + r) * src->w + gx) * 4],
+                        static_cast<size_t>(gw) * 4);
+        }
+        g.x = static_cast<float>(dx + 1);
+        g.y = static_cast<float>(dy + 1);
+    }
+    f->tex = r_->Upload(img, false);
+    return f->tex.id != 0;
+}
+
+int NextCodePoint(const std::string& s, size_t* i) {
+    unsigned char c = static_cast<unsigned char>(s[(*i)++]);
+    int extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+    if (!extra || *i + extra > s.size()) return c;
+    int cp = c & (0x3f >> extra);
+    for (int k = 0; k < extra; k++) cp = (cp << 6) | (static_cast<unsigned char>(s[(*i)++]) & 0x3f);
+    return cp;
 }
 
 float Font::Width(const std::string& s, float scale) const {
     float w = 0;
-    for (unsigned char c : s) {
-        auto it = glyphs.find(c);
+    for (size_t i = 0; i < s.size();) {
+        auto it = glyphs.find(NextCodePoint(s, &i));
         if (it != glyphs.end()) w += it->second.advance * scale;
     }
     return w;
 }
 
 void Font::Draw(Renderer& r, float x, float y, float scale, uint32_t color, const std::string& s) const {
-    for (unsigned char c : s) {
-        auto it = glyphs.find(c);
+    Texture t = tex;
+    t.pixel = r.pixelFonts(); // Smooth Fonts off
+    for (size_t i = 0; i < s.size();) {
+        auto it = glyphs.find(NextCodePoint(s, &i));
         if (it == glyphs.end()) continue;
         const Glyph& g = it->second;
-        float u0 = g.x / tex.w, u1 = (g.x + g.w) / tex.w;
-        float v1 = g.y / tex.h, v0 = (g.y + g.h) / tex.h; // texture is bottom-up
-        r.Rect(tex, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);
+        if (it->first == ' ') {
+            x += g.advance * scale;
+            continue;
+        }
+        // a hair inside the cell: at non-integer scales the edge texels of the neighbouring glyphs bleed in
+        const float e = 0.0f;
+        float u0 = (g.x + e) / tex.w, u1 = (g.x + g.w - e) / tex.w;
+        float v1 = (g.y + e) / tex.h, v0 = (g.y + g.h - e) / tex.h; // texture is bottom-up
+        r.Rect(t, x, y, g.w * scale, g.h * scale, u0, v0, u1, v1, color);
         x += g.advance * scale;
     }
 }

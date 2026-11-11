@@ -86,6 +86,7 @@ void StageView::Apply(const Event& e) {
         int dist = std::abs(e.to.x - e.from.x) + std::abs(e.to.y - e.from.y);
         v.moveDur = kCharacterMove * (dist > 1 ? 0.6f + 0.2f * dist : 1.0f);
         wait_ = v.moveDur * 0.8f;
+        if (dist > 1) FocusOn((v.from + v.to) * 0.5f, v.moveDur + 0.3f); // chargeCam
         break;
     }
     case Ev::Attack: {
@@ -96,6 +97,7 @@ void StageView::Apply(const Event& e) {
         v.lungeT = 0;
         v.pose = "Attack";
         wait_ = kAttack * 0.6f;
+        FocusOn(v.Pos() + d * 0.5f, 0.8f); // attackCamPlayer / attackCamEnemy
         break;
     }
     case Ev::Hit:
@@ -114,6 +116,7 @@ void StageView::Apply(const Event& e) {
         v.dying = false;
         v.fade = 1;
         wait_ = 0.12f;
+        if (introT_ >= 1 && game_.phase() == sim::Phase::EnemiesActing) FocusOn(v.to, 0.6f); // spawnCam (a spawner's, not the stage's first monsters)
         break;
     }
     case Ev::BallShot:
@@ -127,6 +130,7 @@ void StageView::Apply(const Event& e) {
         float dist = Length(ballTo_ - ballFrom_);
         ballDur_ = 0.12f + 0.06f * dist;
         wait_ = ballDur_;
+        FocusOn((ballFrom_ + ballTo_) * 0.5f, ballDur_ + 0.5f); // ballCam
         break;
     }
     case Ev::BallDropped:
@@ -190,6 +194,7 @@ void StageView::Apply(const Event& e) {
         Vec3 at = VisFor(e.actor).Pos() + Vec3{0, 0.4f, 0};
         int n = e.type == Ev::Died ? 18 : 10;
         if (ent && ent->isObstacle()) Burst(at, n, 0.55f, 0.5f, 0.45f, 1.2f, 1.2f, 5, 0.6f, 0.06f); // rubble
+        else if (greyBlood) Burst(at, n, 0.35f, 0.35f, 0.35f, 1.4f, 1.6f, 7, 0.7f, 0.05f);            // grey FX_Blood
         else Burst(at, n, 0.6f, 0.08f, 0.1f, 1.4f, 1.6f, 7, 0.7f, 0.05f);                            // FX_Blood
         break;
     }
@@ -309,8 +314,27 @@ void StageView::UpdateCamera(float dt) {
                 dist = std::max(dist, std::abs(Dot(d, cam_.right)) / tanH - z);
                 dist = std::max(dist, std::abs(Dot(d, cam_.up)) / tanV - z);
             }
+    // the dynamic cameras: closer, aimed between the field's centre and the action
+    focusHold_ -= dt;
+    float goal = focusHold_ > 0 ? 1.0f : 0.0f;
+    focusW_ += (goal - focusW_) * std::min(1.0f, dt * (goal > 0 ? 3.0f : 2.0f));
+    if (!dynamicCamera) focusW_ = 0;
+    float s = focusW_ * focusW_ * (3 - 2 * focusW_);
+    look = Lerp(look, focus_, s * 0.6f);
+    dist *= 1.0f - 0.3f * s;
+    // the intro cams: from the exit door to the field over the stage start
+    if (introT_ < 1) {
+        introT_ = std::min(1.0f, introT_ + dt / 1.6f);
+        float t = introT_ < 0.2f ? 0.0f : (introT_ - 0.2f) / 0.8f;
+        t = t * t * (3 - 2 * t);
+        Vec3 door = TileCenter({game_.fieldX - 1, (game_.fieldY - 1) / 2}) + Vec3{0.5f, 0, 0.5f * ((game_.fieldY + 1) % 2)};
+        look = Lerp(Lerp(look, door, 0.7f), look, t);
+        dist = dist * (0.7f + 0.3f * t);
+    }
     cam_.eye = look - cam_.forward * dist;
 }
+
+bool StageView::ProjectTile(sim::V2 t, float* sx, float* sy) const { return Project(TileCenter(t), sx, sy); }
 
 bool StageView::Project(Vec3 p, float* sx, float* sy) const {
     Mat4 pv = cam_.Proj(static_cast<float>(r_.lowW()) / r_.lowH());
@@ -465,7 +489,7 @@ void StageView::DrawFloor(const V2* cursor, const std::vector<Command>& commands
             for (int i = 0; i < t->bloodSplats; i++) {
                 uint32_t h = Hash(static_cast<uint32_t>(x * 31 + y), static_cast<uint32_t>(i));
                 Vec3 o{((h & 255) / 255.0f - 0.5f) * 0.4f, 0.004f + i * 0.0005f, ((h >> 8 & 255) / 255.0f - 0.5f) * 0.4f};
-                Flat("BloodSplats_0", c + o, X, Z, PackColor(0.45f, 0.16f, 0.19f, 0.8f));
+                Flat("BloodSplats_0", c + o, X, Z, greyBlood ? PackColor(0.3f, 0.3f, 0.3f, 0.8f) : PackColor(0.45f, 0.16f, 0.19f, 0.8f));
             }
         }
     bool idle = !Busy();
@@ -760,6 +784,22 @@ void StageView::DrawEffects() {
         batch_.push_back({d.x, d.y, d.z, 0, 1, c});
     }
     r_.Draw(Texture{}, batch_.data(), static_cast<int>(batch_.size()), Blend::Alpha, false);
+}
+
+std::vector<StageView::BarInfo> StageView::Bars() const {
+    std::vector<BarInfo> out;
+    for (const auto& ent : game_.entities) {
+        Entity* e = ent.get();
+        if (!(e->isEnemy() || e->isPlayer() || e->isObstacle())) continue;
+        Actor* a = static_cast<Actor*>(e);
+        auto it = vis_.find(e->uid);
+        if (it == vis_.end() || !it->second.shown || it->second.dying || !a->isAlive) continue;
+        float sx, sy;
+        if (!Project(it->second.Pos() + Vec3{0, 1.2f, 0}, &sx, &sy)) continue;
+        Enemy* en = e->isEnemy() ? static_cast<Enemy*>(e) : nullptr;
+        out.push_back({sx, sy, a->health, a->maxHealth(), en ? en->actOrder : -1, en && en->stunned()});
+    }
+    return out;
 }
 
 void StageView::DrawOverlay() {

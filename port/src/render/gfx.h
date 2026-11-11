@@ -3,6 +3,7 @@
 // The 3D scene is drawn at the Flashback94 post-process resolution (640x360, point sampled, as the
 // gameplay camera's Flashback94_PostProcess is configured) and then scaled to the output.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -30,6 +31,7 @@ constexpr uint32_t kWhite = 0xffffffffu;
 struct Texture {
     unsigned id = 0;
     int w = 0, h = 0;
+    bool pixel = false; // always point sampled (the pixel fonts: bilinear lets the neighbouring glyphs bleed in)
 };
 
 enum class Blend { Opaque, Cutout, Alpha };
@@ -48,17 +50,40 @@ public:
     void Begin2D();                        // pixel coordinates of the output, origin top-left
     void Rect(const Texture& tex, float x, float y, float w, float h, float u0, float v0, float u1, float v1, uint32_t color);
     void Fill(float x, float y, float w, float h, uint32_t color);
+    // Textured triangles in output pixels (x, y, u, v per vertex; batched like Rect)
+    void Tris(const Texture& tex, const float* xyuv, int vertices, uint32_t color);
+    // Rect / Fill quads are batched per texture (one draw call per run instead of per glyph): drawn
+    // when the texture or the GL state changes, and at the end of the frame by Flush().
+    void Flush();
+    // 2D clipping rectangle in output pixels (origin top-left); w <= 0 turns it off
+    void Clip(float x, float y, float w, float h);
     int outW() const { return outW_; }
     int outH() const { return outH_; }
     int lowW() const { return lowW_; }
     int lowH() const { return lowH_; }
+    // menus scaled by a fraction (1.5 on the Vita) are drawn bilinear instead of with uneven pixels
+    void SetSmooth2D(bool on) { smooth2D_ = on; }
+    // the 3D frame's resolution (at most the output's; the frame texture is made that big)
+    void SetLowRes(int w, int h) {
+        lowW_ = std::min(w, frameMaxW_);
+        lowH_ = std::min(h, frameMaxH_);
+    }
+    void SetPixelFonts(bool on) { pixelFonts_ = on; }
+    bool pixelFonts() const { return pixelFonts_; }
+    bool pixelFonts_ = false;
+    int frameMaxW_ = 640, frameMaxH_ = 360;
+    bool smooth2D_ = false;
 
 private:
     int outW_ = 0, outH_ = 0, lowW_ = 640, lowH_ = 360;
     Texture frame_;   // the low-res frame (render target on the Vita, copy of the back buffer on PC)
     Texture white_;
     unsigned fbo_ = 0, depth_ = 0;
+    bool in2D_ = false;
     void SetBlend(Blend b, bool depthWrite);
+    void DrawNow(const Texture& tex, const Vertex* v, int count, Blend blend, bool depthWrite);
+    std::vector<Vertex> batch_;
+    Texture batchTex_;
 };
 
 } // namespace dd::gfx

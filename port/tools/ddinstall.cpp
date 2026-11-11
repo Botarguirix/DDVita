@@ -292,6 +292,51 @@ int main(int argc, char** argv) {
                 std::printf("%lld %d %s\n", static_cast<long long>(o.pathId), o.classId, ClassName(o.classId) ? ClassName(o.classId) : "?");
         return 0;
     }
+    if (cmd == "scene" && argc >= 4) { // scene <Data> <file>: every object as one JSON line (id, class, script, data)
+        const SerializedFile* f = g.File(argv[3]);
+        if (!f) return std::fprintf(stderr, "no such file\n"), 1;
+        for (const ObjectInfo& o : f->objects) {
+            json line = {{"id", o.pathId}, {"cls", o.classId}};
+            if (o.classId == 114) {
+                auto [assembly, cls] = g.ScriptOf({f, &o});
+                line["script"] = cls;
+            }
+            json v;
+            if (g.Read({f, &o}, &v)) {
+                // the names of the assets a UI component points to (sprite, font)
+                auto name = [&](const json& pptr) -> json {
+                    ObjRef r = g.Resolve(*f, pptr);
+                    json a;
+                    if (!r || !g.Read(r, &a, true) || !a.is_object()) return nullptr;
+                    return a.value("m_Name", json(nullptr));
+                };
+                if (v.contains("m_Sprite")) line["sprite"] = name(v["m_Sprite"]);
+                if (v.contains("m_FontData")) line["font"] = name(v["m_FontData"]["m_Font"]);
+                line["data"] = Printable(v);
+            } else {
+                line["unreadable"] = true;
+            }
+            std::printf("%s\n", line.dump().c_str());
+        }
+        return 0;
+    }
+    if (cmd == "find" && argc >= 5) { // find <Data> <file> <field>: every object that has that field
+        const SerializedFile* f = g.File(argv[3]);
+        if (!f) return std::fprintf(stderr, "no such file\n"), 1;
+        int found = 0, failed = 0;
+        for (const ObjectInfo& o : f->objects) {
+            json v;
+            if (!g.Read({f, &o}, &v)) {
+                failed++;
+                continue;
+            }
+            if (!v.is_object() || !v.contains(argv[4])) continue;
+            found++;
+            std::printf("== %lld\n%s\n", static_cast<long long>(o.pathId), Printable(v).dump(1).c_str());
+        }
+        std::fprintf(stderr, "found %d (unreadable %d)\n", found, failed);
+        return 0;
+    }
     if (cmd == "dump" && argc >= 5) {
         const SerializedFile* f = g.File(argv[3]);
         const ObjectInfo* o = f ? f->Find(std::strtoll(argv[4], nullptr, 10)) : nullptr;

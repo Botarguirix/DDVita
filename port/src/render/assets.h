@@ -19,10 +19,11 @@ struct SpriteDef {
     float border[4] = {0, 0, 0, 0}; // 9-slice: left, bottom, right, top (pixels)
 };
 
-// Placeholder HUD font (tools/make_font.py).
+// Bitmap font: the port's HUD font (font.json) or the game's pixel fonts rasterised by the installer
+// (font_s / font_m / font_l). Text is UTF-8.
 struct Font {
     Texture tex;
-    int height = 13;
+    int height = 13, ascent = 0;
     struct Glyph { float x, y, w, h, advance; };
     std::map<int, Glyph> glyphs;
     float Width(const std::string& s, float scale) const;
@@ -68,6 +69,9 @@ public:
     std::string SwapForTrial(int trial, const std::string& texture) const;
     const std::vector<AnimFrame>* Animation(const std::string& name) const;
     const Font& font() const { return font_; }
+    // the game's menu fonts: 0 small (EffortsPro), 1 medium (SinsGold), 2 large (CompassGold); the HUD
+    // font when the data has none
+    const Font& menuFont(int size) const { return menuFonts_[size].glyphs.empty() ? font_ : menuFonts_[size]; }
     // SpriteMaker.MakeTexture: body, clothes, face and hair layered (later layers win where alpha > 0).
     RuntimeSprite MakePlayerSprite(bool male, PlayerClass cls, const std::string& body, const std::string& hair,
                                    const std::string& expression);
@@ -84,6 +88,11 @@ private:
     std::map<std::string, std::string> clothes_[2]; // [female, male][class name]
     std::map<std::string, std::vector<AnimFrame>> anims_;
     Font font_;
+    Font menuFonts_[3];
+    bool LoadFont(const std::string& name, Font* f, std::string* err);
 };
+
+// Next code point of UTF-8 text (malformed bytes come out as themselves).
+int NextCodePoint(const std::string& s, size_t* i);
 
 } // namespace dd::gfx

@@ -362,6 +362,10 @@ bool ExportAudio(const GameFiles& g, const Extracted& ex, const std::string& dll
                   {"jingle.titleHalloween", "jingles_NES13"}, {"jingle.titleEaster", "Event 13"},
                   {"sfx.playerSwitch", "Coin 10"},         {"sfx.button", "Button 1"}};
 
+    // TrialCompleteTimeline.trialCompleteJingle
+    if (auto tc = ex.scene.find("TrialCompleteTimeline"); tc != ex.scene.end() && !tc->second.empty())
+        if (json n = clipName(fileOf(tc->second.front()), At(tc->second.front(), "trialCompleteJingle")); n.is_string()) named["jingle.trialComplete"] = n;
+
     // CrowdAudio and the AudioSource on its GameObject
     auto crowdIt = ex.scene.find("CrowdAudio");
     if (crowdIt == ex.scene.end() || crowdIt->second.empty()) return *err = "no CrowdAudio", false;

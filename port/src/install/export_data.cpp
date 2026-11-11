@@ -130,7 +130,7 @@ ExtractFilter ExportFilter() {
     f.skipConfigs = kSkipConfigClasses;
     for (const char* c : kSceneSingletons) f.sceneClasses.insert(c);
     // help.json's popups, achievements.json's list, audio.json's crowd
-    for (const char* c : {"EnemyInfoPopup", "PlayerStatsPopup", "AttackTooltip", "AchievementManagerDeathball", "CrowdAudio"})
+    for (const char* c : {"EnemyInfoPopup", "PlayerStatsPopup", "AttackTooltip", "AchievementManagerDeathball", "CrowdAudio", "TrialCompleteTimeline"})
         f.sceneClasses.insert(c);
     return f;
 }
@@ -342,6 +342,158 @@ bool ExportAchievements(const GameFiles& g, const Extracted& ex, const std::stri
     json root = {{"achievements", std::move(list)},
                  {"lockedIcon", SpriteName(g, ex, manager, manager["defaultLockedSprite"])}};
     if (!WriteText(outPath, root.dump(1))) return *err = "cannot write " + outPath, false;
+    return true;
+}
+
+} // namespace dd::install
+
+// ---------------------------------------------------------------------------------------------
+// UI: the scenes' Canvas trees (RectTransform, Image, Text, effects, layout) for the port's
+// generic Unity UI renderer (ui/canvas.h). Needs the MonoBehaviours' script trees (run it before
+// they are dropped).
+// ---------------------------------------------------------------------------------------------
+namespace dd::install {
+
+namespace {
+
+json V2(const json& v) { return json::array({v.value("x", 0.0), v.value("y", 0.0)}); }
+json Rgba(const json& c) { return json::array({c.value("r", 1.0), c.value("g", 1.0), c.value("b", 1.0), c.value("a", 1.0)}); }
+
+std::string ShortName(const std::string& cls) {
+    size_t dot = cls.rfind('.');
+    return dot == std::string::npos ? cls : cls.substr(dot + 1);
+}
+
+} // namespace
+
+bool ExportUi(const GameFiles& g, const Extracted& ex, const std::string& sceneFile, const std::string& outPath, std::string* err) {
+    const SerializedFile* f = g.File(sceneFile);
+    if (!f) return *err = "no scene " + sceneFile, false;
+    Tables tables(ex);
+    auto read = [&](int64_t id, json* v) {
+        const ObjectInfo* o = f->Find(id);
+        return o && g.Read({f, o}, v);
+    };
+    auto assetName = [&](const json& pptr) -> json {
+        ObjRef r = g.Resolve(*f, pptr);
+        json a;
+        if (!r || !g.Read(r, &a, true) || !a.is_object()) return nullptr;
+        return a.value("m_Name", json(nullptr));
+    };
+    // every RectTransform, keyed by path id; the nodes are numbered in a depth-first walk
+    std::unordered_map<int64_t, json> rects;
+    for (const ObjectInfo& o : f->objects) {
+        if (o.classId != 224) continue;
+        json v;
+        if (g.Read({f, &o}, &v)) rects[o.pathId] = std::move(v);
+    }
+    json nodes = json::array();
+    std::function<void(int64_t, int)> walk = [&](int64_t rtId, int parent) {
+        const json& rt = rects[rtId];
+        json go;
+        int64_t goId = rt["m_GameObject"].value("m_PathID", int64_t(0));
+        read(goId, &go);
+        json n = {{"n", go.value("m_Name", "")},
+                  {"a", go.value("m_IsActive", 1) != 0},
+                  {"p", parent},
+                  {"amin", V2(rt["m_AnchorMin"])},
+                  {"amax", V2(rt["m_AnchorMax"])},
+                  {"piv", V2(rt["m_Pivot"])},
+                  {"pos", V2(rt["m_AnchoredPosition"])},
+                  {"size", V2(rt["m_SizeDelta"])},
+                  {"scale", V2(rt["m_LocalScale"])}};
+        json comps = json::array();
+        for (const json& c : go.value("m_Component", json::array())) {
+            const json& ref = c.contains("component") ? c["component"] : c;
+            int64_t cid = ref.value("m_PathID", int64_t(0));
+            const ObjectInfo* co = f->Find(cid);
+            if (!co || co->classId != 114) continue;
+            std::string cls = ShortName(g.ScriptOf({f, co}).second);
+            json v;
+            if (!g.Read({f, co}, &v) || !v.is_object()) {
+                comps.push_back({{"t", cls}});
+                continue;
+            }
+            json k = {{"t", cls}, {"on", v.value("m_Enabled", 1) != 0}};
+            if (cls == "Image" || cls == "RawImage") {
+                k["id"] = cid;
+                k["sprite"] = assetName(v.value("m_Sprite", json()));
+                k["color"] = Rgba(v["m_Color"]);
+                for (const char* key : {"m_Type", "m_FillMethod", "m_FillOrigin", "m_FillCenter", "m_FillClockwise", "m_PreserveAspect"})
+                    k[key + 2] = v.value(key, 0);
+                k["FillAmount"] = v.value("m_FillAmount", 1.0);
+                k["PPUM"] = v.value("m_PixelsPerUnitMultiplier", 1.0);
+            } else if (cls == "Text") {
+                const json& fd = v["m_FontData"];
+                k["font"] = assetName(fd["m_Font"]);
+                k["color"] = Rgba(v["m_Color"]);
+                k["text"] = v.value("m_Text", "");
+                for (const char* key : {"m_FontSize", "m_FontStyle", "m_Alignment", "m_HorizontalOverflow", "m_VerticalOverflow",
+                                        "m_BestFit", "m_MinSize", "m_MaxSize", "m_RichText", "m_AlignByGeometry"})
+                    k[key + 2] = fd.value(key, 0);
+                k["LineSpacing"] = fd.value("m_LineSpacing", 1.0);
+            } else if (cls == "Shadow" || cls == "Outline") {
+                k["color"] = Rgba(v["m_EffectColor"]);
+                k["dist"] = V2(v["m_EffectDistance"]);
+            } else if (cls == "HorizontalLayoutGroup" || cls == "VerticalLayoutGroup" || cls == "GridLayoutGroup") {
+                const json& p = v["m_Padding"];
+                k["pad"] = {p.value("m_Left", 0), p.value("m_Right", 0), p.value("m_Top", 0), p.value("m_Bottom", 0)};
+                k["align"] = v.value("m_ChildAlignment", 0);
+                if (cls == "GridLayoutGroup") {
+                    k["cell"] = V2(v["m_CellSize"]);
+                    k["spacing"] = V2(v["m_Spacing"]);
+                    for (const char* key : {"m_StartCorner", "m_StartAxis", "m_Constraint", "m_ConstraintCount"}) k[key + 2] = v.value(key, 0);
+                } else {
+                    k["spacing"] = v.value("m_Spacing", 0.0);
+                    for (const char* key : {"m_ChildControlWidth", "m_ChildControlHeight", "m_ChildForceExpandWidth",
+                                            "m_ChildForceExpandHeight", "m_ChildScaleWidth", "m_ChildScaleHeight", "m_ReverseArrangement"})
+                        k[key + 2] = v.value(key, 0);
+                }
+            } else if (cls == "Button" || cls == "Toggle" || cls == "Slider") { // Selectable: its colour tint and the graphic it tints
+                const json& cb = v["m_Colors"];
+                k["transition"] = v.value("m_Transition", 1);
+                k["normal"] = Rgba(cb["m_NormalColor"]);
+                k["selected"] = Rgba(cb["m_SelectedColor"]);
+                k["disabled"] = Rgba(cb["m_DisabledColor"]);
+                k["mult"] = cb.value("m_ColorMultiplier", 1.0);
+                k["target"] = v["m_TargetGraphic"].value("m_PathID", int64_t(0));
+            } else if (cls == "LayoutElement") {
+                for (const char* key : {"m_MinWidth", "m_MinHeight", "m_PreferredWidth", "m_PreferredHeight", "m_FlexibleWidth", "m_FlexibleHeight"})
+                    k[key + 2] = v.value(key, -1.0);
+                k["Ignore"] = v.value("m_IgnoreLayout", 0);
+            } else if (cls == "ContentSizeFitter") {
+                k["h"] = v.value("m_HorizontalFit", 0);
+                k["v"] = v.value("m_VerticalFit", 0);
+            } else if (cls == "Mask") {
+                k["show"] = v.value("m_ShowMaskGraphic", 1);
+            } else if (cls == "LocalizeStringEvent") {
+                k["key"] = tables.Loc(v.value("m_StringReference", json()));
+            } else if (cls == "CanvasScaler") {
+                k["ref"] = V2(v["m_ReferenceResolution"]);
+                k["factor"] = v.value("m_ScaleFactor", 1.0);
+                k["mode"] = v.value("m_UiScaleMode", 0);
+            }
+            comps.push_back(std::move(k));
+        }
+        if (!comps.empty()) n["c"] = std::move(comps);
+        int me = static_cast<int>(nodes.size());
+        nodes.push_back(std::move(n));
+        json kids = json::array();
+        for (const json& c : rt.value("m_Children", json::array())) {
+            int64_t cid = c.value("m_PathID", int64_t(0));
+            if (!rects.count(cid)) continue;
+            kids.push_back(static_cast<int>(nodes.size()));
+            walk(cid, me);
+        }
+        nodes[static_cast<size_t>(me)]["k"] = std::move(kids);
+    };
+    std::vector<int64_t> roots;
+    for (const ObjectInfo& o : f->objects)
+        // a Canvas root: its parent (if any) is a plain Transform, not a RectTransform
+        if (o.classId == 224 && rects.count(o.pathId) && !rects.count(rects[o.pathId]["m_Father"].value("m_PathID", int64_t(0))))
+            roots.push_back(o.pathId);
+    for (int64_t r : roots) walk(r, -1);
+    if (!WriteText(outPath, json({{"nodes", std::move(nodes)}}).dump())) return *err = "cannot write " + outPath, false;
     return true;
 }
 

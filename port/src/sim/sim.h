@@ -57,6 +57,7 @@ class Pickup;
 class Hazard;
 class Attack;
 struct FieldTile;
+struct Command;
 
 // ---------------------------------------------------------------------------------------------
 // Presentation events
@@ -99,6 +100,19 @@ struct Event {
     std::string text;
 };
 
+// The game's PlayerStat (AP has no upgrade screen entry; PlayerClass is not a stat to level)
+enum class PlayerStat : int { Stamina, AP, Strength, Perk, PlayerClass };
+
+// What the stage being played reports to the persistent meta layer (stats and achievements):
+// the app's Meta implements it. Only the live stage has one, so replays never count twice.
+class MetaSink {
+public:
+    virtual ~MetaSink() = default;
+    virtual void OnEvent(const Game& g, const Event& e) = 0;   // every presentation event, as emitted
+    virtual void OnStageEnded(const Game& g) = 0;              // PlayerWon / PlayerLost
+    virtual void OnPlayerAction(const Game& g, const Command& c) = 0; // a command starts executing
+};
+
 // ---------------------------------------------------------------------------------------------
 // Session-level state (HumanPlayer, HumanTeam, Gold, SessionStatTracker, LeagueManager, BallMods)
 // ---------------------------------------------------------------------------------------------
@@ -134,6 +148,22 @@ public:
     int GetBallDamage() const;
     int GetBallKnockback() const;
     int GetBallStun() const;
+    int GetPerkStatValue() const { return perkConfig ? perkConfig->perkStatValue : 0; }
+
+    // ---- level up (HumanPlayer / PlayerStatUpgrader) ----
+    int GetStatLevel(PlayerStat s) const;
+    int GetStatLevelCap(PlayerStat s) const;
+    bool StatIsMaxLevel(PlayerStat s) const { return GetStatLevel(s) >= GetStatLevelCap(s); }
+    int GetNextUpgradePrice(PlayerStat s) const;
+    int GetStatValue(PlayerStat s) const;
+    bool AffordableUpgradeAvailable(PlayerStat s) const;
+    void LevelUpPlayerStat(PlayerStat s);
+};
+
+// StageScore's parts of the last stage's score (the results screen shows each)
+struct StageScoreParts {
+    int complete = 0, touchdown = 0, withinPar = 0, parBonus = 0, treasure = 0;
+    int gemTarget = 0; // StageScore.GetGemRankTarget
 };
 
 struct StageResults {
@@ -158,6 +188,7 @@ public:
     std::vector<HumanPlayer*> activePlayers, deadPlayers, reservePlayers;
     int gold = 0;
     int ballCarrierIndex = 0;        // SessionStatTracker.ballCarrierIndex
+    bool swapPositions = false;      // StageStartPanel "Swap Positions" (this stage only)
     int easyBallModsUsed = 0, hardBallModsUsed = 0;
     DifficultyEffect ballEffect = DifficultyEffect::Neutral; // BallMods.currentEffect
     int currentTrial = 0, currentStage = 0;                  // LeagueManager
@@ -172,6 +203,7 @@ public:
     int currentStageNumberAsOverallStage() const { return currentTrial * 3 + currentStage; }
     const Stage& CurrentStage() const { return session.trials[currentTrial].stages[currentStage]; }
     const BallModifierConfig* BallModConfig() const; // BallMods.currentConfig
+    const BallModifierConfig* BallModConfigFor(DifficultyEffect e) const; // BallMods.GetConfigForCurrentStage
 
     void PlayerDied(int playerNumber);     // HumanTeam.PlayerDied
     void ResetStagePlayerReferences();
@@ -180,6 +212,14 @@ public:
     int GetFinalScoreTotal() const;         // stage scores + survival bonus (final stage only)
     bool AdvanceStage();                    // LeagueManager: next stage; false at the end of the run
     bool currentStageIsFinalStageInFinalTrial() const { return currentTrial >= 3 && currentStage >= 2; }
+    bool currentStageIsLastInCurrentTrial() const { return currentStage >= 2; }
+
+    // ---- team management (HumanTeam, StageEndUI, PlayerStatUpgrader, NewRecruitButton) ----
+    static constexpr int kMaxTeamSize = 2;
+    bool teamIsAtMaximumCapacity() const { return static_cast<int>(activePlayers.size()) >= kMaxTeamSize; }
+    bool AffordableUpgradesOrRecruitsAvailable() const;
+    bool TryUpgrade(int activeIndex, PlayerStat s); // pays and levels up; false if not allowed
+    bool TryRecruit(int reserveIndex);              // pays and sends the reserve to the team
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -666,6 +706,7 @@ public:
     std::vector<Event> events;
     bool fastMode = false;      // AppSettingsDeathball.pref_fastMode (cosmetic only)
     bool suggestUndo = true;    // AppSettingsDeathball.pref_suggestUndo
+    MetaSink* meta = nullptr;   // stats and achievements of the stage being played (never replays)
 
     // ---- lifecycle (GameController) ----
     void Start();                                 // Start() + the stage start sequence
@@ -674,11 +715,13 @@ public:
     int StaminaCost(const PlayerActionConfig* c, const Player* p, int distance = 0) const;
     int Turn() const { return turn_; }
     int TurnPar() const { return turnPar_; }
+    int ParBonusRankTarget() const; // StageScore.GetParBonusRankTarget (turns under par, negative)
     int ParDifference() const { return turn_ - turnPar_; }
     bool anyPlayerPassedFinishLine() const { return playerOnFinishLine_ != nullptr; }
     bool gameEndedInDefeat = false;
     const StageResults& results() const { return results_; }
     int goldEarned() const { return goldEarned_; }
+    const StageScoreParts& scoreParts() const { return scoreParts_; }
 
     // ---- input ----
     std::vector<Command> GetCommands();          // tile commands + buttons for the current player
@@ -766,6 +809,7 @@ private:
     Command command_; // PlayerCommand.command
     StageResults results_;
     int goldEarned_ = 0;
+    StageScoreParts scoreParts_;
     const BallModifierConfig* modifier_ = nullptr;
     bool awaitingUndo_ = false;          // GameController.SuggestUndo is waiting for an answer
     std::vector<Player*> allPlayers_;    // every Player spawned this stage (UndoPlayer subscribers)

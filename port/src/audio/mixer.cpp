@@ -90,6 +90,10 @@ DdaStream::~DdaStream() {
 bool DdaStream::Open(const std::string& path) {
     f_ = std::fopen(path.c_str(), "rb");
     if (!f_) return false;
+    // unbuffered: the audio thread reads whole blocks into raw_, and a stdio buffer (allocated on the
+    // first read, from the audio thread) raced the game thread's file I/O on the Vita's newlib and
+    // corrupted the heap (crash entering the Daily Challenge)
+    std::setvbuf(f_, nullptr, _IONBF, 0);
     Header h;
     if (!ReadHeader(f_, &h)) return false;
     rate_ = h.rate;
@@ -269,6 +273,7 @@ void Mixer::Mix(int16_t* out, int frames) {
                       voices_.end());
         MixStream(streams_[Music], acc, frames, gain_[MasterGroup] * gain_[MusicGroup]);
         MixStream(streams_[Jingle], acc, frames, gain_[MasterGroup] * gain_[JingleGroup]);
+        MixStream(streams_[Crowd], acc, frames, gain_[MasterGroup] * gain_[SoundGroup]);
     }
     for (int i = 0; i < frames * 2; i++) out[i] = static_cast<int16_t>(std::clamp(acc[i], -32768.0f, 32767.0f));
 }

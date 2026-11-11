@@ -14,6 +14,7 @@
 // usual requirement of vitaGL homebrew).
 #include <psp2/audioout.h>
 #include <psp2/ctrl.h>
+#include <psp2/touch.h>
 #include <psp2/io/stat.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/message_dialog.h>
@@ -74,6 +75,8 @@ bool Init(int* width, int* height, std::string*) {
     scePowerSetGpuXbarClockFrequency(166);
     vglInitExtended(0, 960, 544, 16 * 1024 * 1024, SCE_GXM_MULTISAMPLE_NONE);
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_ANALOG);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, SCE_TOUCH_SAMPLING_STATE_START);
+    sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, SCE_TOUCH_SAMPLING_STATE_START);
     sceIoMkdir(kDataDir, 0777);
     *width = 960;
     *height = 544;
@@ -134,6 +137,21 @@ bool Poll(std::vector<Input>* inputs, int* width, int* height) {
         g_selectCombo = false;
     }
     g_prev = b;
+    // a tap on the rear touch pad (a new touch) toggles the health bars
+    static bool touching = false;
+    SceTouchData touch{};
+    if (sceTouchPeek(SCE_TOUCH_PORT_BACK, &touch, 1) > 0) {
+        bool now = touch.reportNum > 0;
+        if (now && !touching) inputs->push_back(Input::Bars);
+        touching = now;
+    }
+    // a tap on the touch screen: the toolbar's Help (the team info)
+    static bool touchingFront = false;
+    if (sceTouchPeek(SCE_TOUCH_PORT_FRONT, &touch, 1) > 0) {
+        bool now = touch.reportNum > 0;
+        if (now && !touchingFront) inputs->push_back(Input::Help);
+        touchingFront = now;
+    }
     return true;
 }
 
@@ -173,6 +191,8 @@ const char* ButtonName(Input in) {
     case Input::Left:
     case Input::Right: return "Left/Right";
     case Input::Info: return "R";
+    case Input::Help: return "Touch";
+    case Input::Bars: return "Rear touch";
     case Input::Confirm:
     case Input::Yes: return "Cross";
     case Input::Rest:
@@ -228,53 +248,11 @@ void ShowError(const std::string& msg) {
 std::string GameCopyDir() { return std::string(kDataDir) + "/game"; }
 std::string FontDir() { return "app0:assets"; }
 
-namespace {
-bool g_progressOpen = false;
-double g_progressShown = 0;
-std::string g_progressMsg;
-} // namespace
+// the install's progress is drawn by the app (LoadingScreen); this only keeps the console awake (no
+// auto-suspend: nobody touches it meanwhile)
+void ShowProgress(const std::string&, float) { sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT); }
 
-// the system progress dialog; redrawn at most every 1/10 s (each redraw waits for vblank)
-void ShowProgress(const std::string& msg, float fraction) {
-    double now = Seconds();
-    if (g_progressOpen && msg == g_progressMsg && now - g_progressShown < 0.1) return;
-    sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DEFAULT); // no auto-suspend: nobody touches the console meanwhile
-    if (!g_progressOpen) {
-        static SceMsgDialogProgressBarParam bar;
-        bar = SceMsgDialogProgressBarParam{};
-        bar.barType = SCE_MSG_DIALOG_PROGRESSBAR_TYPE_PERCENTAGE;
-        bar.msg = reinterpret_cast<const SceChar8*>("Installing the game data from your copy of Dungeon Deathball.\n"
-                                                    "This takes a few minutes, only once.");
-        SceMsgDialogParam param;
-        sceMsgDialogParamInit(&param);
-        param.mode = SCE_MSG_DIALOG_MODE_PROGRESS_BAR;
-        param.progBarParam = &bar;
-        if (sceMsgDialogInit(&param) < 0) return;
-        g_progressOpen = true;
-    }
-    if (msg != g_progressMsg) {
-        g_progressMsg = msg;
-        sceMsgDialogProgressBarSetMsg(SCE_MSG_DIALOG_PROGRESSBAR_TARGET_BAR_DEFAULT, reinterpret_cast<const SceChar8*>(g_progressMsg.c_str()));
-    }
-    sceMsgDialogProgressBarSetValue(SCE_MSG_DIALOG_PROGRESSBAR_TARGET_BAR_DEFAULT,
-                                    static_cast<SceUInt32>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100)));
-    g_progressShown = now;
-    glClearColor(0.105f, 0.086f, 0.149f, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    vglSwapBuffers(GL_TRUE);
-}
-
-void EndProgress() {
-    if (!g_progressOpen) return;
-    sceMsgDialogClose();
-    while (sceMsgDialogGetStatus() == SCE_COMMON_DIALOG_STATUS_RUNNING) {
-        glClear(GL_COLOR_BUFFER_BIT);
-        vglSwapBuffers(GL_TRUE);
-    }
-    sceMsgDialogTerm();
-    g_progressOpen = false;
-    g_progressMsg.clear();
-}
+void EndProgress() {}
 
 } // namespace dd::app::platform
 

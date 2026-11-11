@@ -45,6 +45,8 @@ Input FromKey(SDL_Keycode k) {
     case SDLK_ESCAPE: return Input::Menu;
     case SDLK_BACKSPACE: return Input::Back;
     case SDLK_i: return Input::Info;
+    case SDLK_h: return Input::Bars;
+    case SDLK_F2: return Input::Help;
     default: return Input::None;
     }
 }
@@ -80,6 +82,8 @@ bool Init(int* width, int* height, std::string* err) {
     }
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+    // fixed function: ask for compatibility (EGL drivers otherwise may hand out ES or core)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     // DDVITA_WINDOW=960x544 previews the Vita's layout (480x272 virtual)
@@ -168,6 +172,8 @@ const char* ButtonName(Input in) {
     case Input::Left:
     case Input::Right: return "Left/Right";
     case Input::Info: return "I";
+    case Input::Help: return "F2";
+    case Input::Bars: return "H";
     case Input::Confirm: return "Enter";
     case Input::PassTake: return "Q";
     case Input::Shoot: return "E";
