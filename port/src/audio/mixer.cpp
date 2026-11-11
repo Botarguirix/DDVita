@@ -90,6 +90,10 @@ DdaStream::~DdaStream() {
 bool DdaStream::Open(const std::string& path) {
     f_ = std::fopen(path.c_str(), "rb");
     if (!f_) return false;
+    // unbuffered: the audio thread reads whole blocks into raw_, and a stdio buffer (allocated on the
+    // first read, from the audio thread) raced the game thread's file I/O on the Vita's newlib and
+    // corrupted the heap (crash entering the Daily Challenge)
+    std::setvbuf(f_, nullptr, _IONBF, 0);
     Header h;
     if (!ReadHeader(f_, &h)) return false;
     rate_ = h.rate;
