@@ -22,6 +22,7 @@
 #include "app/platform.h"
 #include "core/calendar.h"
 #include "core/session_generator.h"
+#include "app/loading_screen.h"
 #include "install/installer.h"
 
 namespace dd::app {
@@ -1313,10 +1314,22 @@ int RunGame(int argc, char** argv) {
     // the user's own game copied to the console: the data is built from it on the first start (and
     // again when a new version of the port exports more)
     std::string gameCopy = platform::GameCopyDir();
+    const char* assetsOverride = std::getenv("DDVITA_ASSETS");
+    auto loading = std::make_unique<LoadingScreen>(r, assetsOverride ? assetsOverride : platform::FontDir());
+    if (const char* preview = std::getenv("DDVITA_LOADING_PREVIEW")) { // (a screenshot of the loading screen)
+        for (int i = 0; i < 20; i++) loading->Draw("Installing: Textures", 0.42f, true);
+        platform::SaveScreenshot(preview, ww, wh);
+        return 0;
+    }
     if (!testing && pos.empty() && !gameCopy.empty() && install::HasGameCopy(gameCopy) &&
         install::NeedsInstall(platform::SaveDir())) {
+        LoadingScreen* ls = loading.get();
         bool ok = install::Install(gameCopy, platform::SaveDir(), platform::FontDir(),
-                                   [](const char* what, float f) { platform::ShowProgress(what, f); }, &err);
+                                   [ls](const char* what, float f) {
+                                       ls->Draw(std::string("Installing: ") + what, f);
+                                       platform::ShowProgress(what, f); // keeps the console awake
+                                   },
+                                   &err);
         platform::EndProgress();
         if (!ok) return fail("Installing the game data from " + gameCopy + " failed:\n" + err);
         dataDir = platform::DataDir();
@@ -1325,6 +1338,7 @@ int RunGame(int argc, char** argv) {
                             ? "Run instalar.bat on a PC with your Steam copy of Dungeon Deathball."
                             : "Copy the \"Dungeon Deathball_Data\" folder and UnityPlayer.dll from your Steam copy of "
                               "Dungeon Deathball into " + gameCopy + "/ and start the game again.";
+    if (!testing) loading->Draw("Loading", -1, true);
     GameData data;
     Assets assets;
     if (!data.Load(dataDir + "/gamedata.json", &err) || !assets.Load(dataDir + "/render", &r, &err))
@@ -1338,6 +1352,7 @@ int RunGame(int argc, char** argv) {
     if (!sound.Load(dataDir + "/audio", &mixer, &err)) std::fprintf(stderr, "no audio: %s\n", err.c_str());
     else platform::StartAudio(&mixer);
 
+    loading.reset();
     auto app = std::make_unique<App>(r, assets, data, sound, mixer, dataDir);
     app->autoPlay = autoPlay;
     app->fixedDate = fixedDate;
